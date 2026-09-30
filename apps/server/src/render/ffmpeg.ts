@@ -67,9 +67,3 @@ export async function assemble(chunks: string[], audioWav: string | null, output
     throw new Error(`ffmpeg could not assemble the video: ${(e as { stderr?: string }).stderr?.slice(-600) ?? e}`);
   }
 }
-
-/** Duration and video stream frame count of a media file. */
-export async function probe(file: string): Promise<{ duration: number }> {
-  const { stdout } = await exec('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', file]);
-  return { duration: Number(stdout.trim()) };
-}

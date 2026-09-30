@@ -64,6 +64,14 @@ const scenarios = {
     { calls: [{ name: 'commit', args: { message: 'Add voice-over and captions' } }] },
     { text: 'Added a voice-over with word-by-word captions.' },
   ],
+  hang: [
+    { text: 'Running something that never ends.', calls: [{ name: 'run_command', args: { command: 'echo started; sleep 30', timeout_seconds: 2 } }] },
+    { text: 'That command was stopped by its timeout.' },
+  ],
+  slow: [
+    { text: 'Starting a long job.', calls: [{ name: 'run_command', args: { command: 'echo working; sleep 120' } }] },
+    { text: 'Finished the long job.' },
+  ],
   brand: [
     { text: 'Reading your brand files first.', calls: [{ name: 'read_file', args: { path: 'assets/brand.svg' } }, { name: 'read_file', args: { path: 'assets/brief.pdf' } }] },
     { text: 'I will use the brand colours from the SVG and the brief.' },
@@ -84,7 +92,7 @@ function pick(messages) {
   const idx = messages.length - 1 - lastUser;
   const prompt = String(messages[idx]?.content ?? '').toLowerCase();
   const tail = messages.slice(idx + 1);
-  const name = prompt.includes('brand files') ? 'brand' : prompt.includes('logo intro') ? 'intro' : prompt.includes('secret') ? 'command' : prompt.includes('voice') ? 'voice' : prompt.includes('share') ? 'share' : prompt.includes('tagline') ? 'edit' : null;
+  const name = prompt.includes('hang') ? 'hang' : prompt.includes('slowly') ? 'slow' : prompt.includes('brand files') ? 'brand' : prompt.includes('logo intro') ? 'intro' : prompt.includes('secret') ? 'command' : prompt.includes('voice') ? 'voice' : prompt.includes('share') ? 'share' : prompt.includes('tagline') ? 'edit' : null;
   return { name, step: tail.filter((m) => m.role === 'assistant').length };
 }
 

@@ -144,7 +144,17 @@ class Player {
     this.el.play.onclick = toggle;
     this.el.big.onclick = toggle;
     canvas.onclick = toggle;
+    // Dragging the scrubber pauses the sound; it resumes when the drag ends.
+    let resume = false;
+    this.el.scrub.onpointerdown = () => {
+      resume = this.playing;
+      if (resume) this.pause();
+    };
     this.el.scrub.oninput = () => this.seek(Number(this.el.scrub.value) / 1000);
+    this.el.scrub.onchange = () => {
+      if (resume) void this.play();
+      resume = false;
+    };
     this.el.mute.onclick = () => {
       this.muted = !this.muted;
       if (this.master) this.master.gain.value = this.muted ? 0 : 1;
@@ -230,12 +240,12 @@ class Player {
   private async startAudio(): Promise<void> {
     const ac = new AudioContext();
     this.ac = ac;
+    this.origin = ac.currentTime - this.time;
     this.master = ac.createGain();
     this.master.gain.value = this.muted ? 0 : 1;
     this.master.connect(ac.destination);
     try {
       await soundtrack.prepare(ac);
-      this.origin = ac.currentTime - this.time;
       await soundtrack.schedule(ac, this.origin, this.master);
     } catch (e) {
       engine.errors.push({ path: 'audio', message: e instanceof Error ? e.message : String(e) });

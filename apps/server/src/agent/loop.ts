@@ -50,6 +50,7 @@ async function run(project: Project, userId: string, text: string, origin: strin
   const voiceAvailable = elevenLabsKey(userId) !== null;
 
   await commitProject(project.id, 'Save changes made outside the agent');
+  settleUnansweredCalls(project.id);
   saveMessage(project.id, { role: 'user', content: text });
 
   const dir = projectDir(project.id);
@@ -67,6 +68,10 @@ async function run(project: Project, userId: string, text: string, origin: strin
     for (let step = 0; step < MAX_STEPS; step++) {
       compact(messages);
       const turn = await completeTurn();
+      if (!turn.content && !turn.toolCalls.length) {
+        saveMessage(project.id, { role: 'assistant', content: 'The model returned an empty reply. Try again, or pick another model in Settings.', failed: true });
+        return;
+      }
       saveMessage(project.id, { role: 'assistant', content: turn.content, toolCalls: turn.toolCalls });
       messages.push({ role: 'assistant', content: turn.content || null, ...(turn.toolCalls.length ? { tool_calls: turn.toolCalls } : {}) });
       if (!turn.toolCalls.length) return;

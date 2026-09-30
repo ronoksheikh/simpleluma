@@ -43,6 +43,14 @@ async function newVideo(name, template) {
   await page.waitForURL('**/p/*');
   return projectIdFromUrl();
 }
+/** Click "Create link" in the open share dialog and return the new link (the newest one is listed first). */
+async function createLink() {
+  const links = page.getByLabel('Share link');
+  const before = await links.count();
+  await page.getByRole('button', { name: 'Create link' }).click();
+  await page.waitForFunction((n) => document.querySelectorAll('input[aria-label="Share link"]').length > n, before);
+  return links.first().inputValue();
+}
 async function renderAndWait(button) {
   await page.getByRole('button', { name: button }).click();
   await page.getByRole('tab', { name: 'Renders' }).waitFor();
@@ -195,6 +203,21 @@ try {
     await shot('22-agent-terminal');
   });
 
+  await step('agent commands stop at their timeout and can be stopped by the user', async () => {
+    await chat('Run something that will hang');
+    await page.getByRole('tab', { name: 'Agent' }).click();
+    await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows')].some((el) => el.textContent.includes('stopped after 2s')), null, { timeout: 30_000 });
+    await agentIdle();
+    await chat('Do a long job slowly');
+    await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows')].some((el) => el.textContent.includes('working')), null, { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await agentIdle();
+    await expectText(page.locator('div'), 'Ran echo working', 10_000);
+    const last = (await (await page.request.get(`${BASE}/api/projects/${introId}/chat`)).json()).messages.at(-1);
+    if (last.role === 'assistant' && last.content.includes('Finished the long job')) throw new Error('the run continued after Stop');
+    await shot('23-stopped');
+  });
+
   // 8: ElevenLabs ------------------------------------------------------------------------------------
   await step('settings: ElevenLabs Test shows voices and quota; Save only after a passing test', async () => {
     await page.goto(BASE + '/settings');
@@ -238,9 +261,7 @@ try {
   let shareUrl;
   await step('share a preview version: a logged-out visitor can play it', async () => {
     await page.getByRole('button', { name: 'Share preview' }).click();
-    await page.getByRole('button', { name: 'Create link' }).click();
-    await page.getByLabel('Share link').first().waitFor();
-    shareUrl = await page.getByLabel('Share link').first().inputValue();
+    shareUrl = await createLink();
     await shot('40-share-dialog');
     const visitor = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const vp = await visitor.newPage();
@@ -274,19 +295,26 @@ try {
   await step('share a render: visitor gets the MP4 without logging in; expiry is enforced', async () => {
     await page.getByRole('tab', { name: 'Renders' }).click();
     await page.getByRole('button', { name: 'Share', exact: true }).first().click();
-    await page.getByRole('button', { name: 'Create link' }).click();
-    await page.getByLabel('Share link').first().waitFor();
-    const url = await page.getByLabel('Share link').first().inputValue();
+    const url = await createLink();
     const token = url.split('/s/')[1];
     const visitor = await browser.newContext();
     const vp = await visitor.newPage();
     await vp.goto(url);
-    await vp.locator('video').waitFor();
-    await vp.waitForFunction(() => document.querySelector('video').readyState >= 1, null, { timeout: 15_000 });
-    const duration = await vp.evaluate(() => document.querySelector('video').duration);
-    console.log(`   visitor video duration: ${duration}s`);
-    if (!(duration > 4)) throw new Error('shared render has no duration');
+    await vp.locator('video').waitFor().catch(async () => {
+      throw new Error(`the shared render page shows: ${(await vp.locator('body').innerText()).slice(0, 120)} (${url})`);
+    });
+    // The bundled test Chromium cannot decode H.264, so check the file the link serves instead of playback.
+    const head = await fetch(`${BASE}/api/share/${token}/video`, { headers: { range: 'bytes=0-1' } });
+    if (head.status !== 206 || head.headers.get('content-type') !== 'video/mp4') throw new Error(`the shared video is not served with ranges (${head.status})`);
+    const info = await fetch(`${BASE}/api/share/${token}`).then((r) => r.json());
+    console.log(`   visitor sees: ${info.label}`);
+    await vp.screenshot({ path: `${SHOTS}/43-public-video.png` });
     await visitor.close();
+    const short = await page.request.post(`${BASE}/api/projects/${introId}/shares`, { data: { kind: 'version', expiresInHours: 0.0003 } });
+    const shortToken = (await short.json()).token;
+    await page.waitForTimeout(1600);
+    const expired = await fetch(`${BASE}/api/share/${shortToken}`);
+    if (expired.status !== 410) throw new Error(`an expired link should answer 410, got ${expired.status}`);
     const ok = await fetch(`${BASE}/api/share/${token}`);
     if (ok.status !== 200) throw new Error('share info should be public');
     await page.getByRole('button', { name: /close/i }).first().click();
@@ -313,6 +341,22 @@ try {
     if (!m || Number(m[1]) >= Number(m[2]) || Number(m[3]) === 0) throw new Error(`expected a partial re-render, got "${second}"`);
     await shot('50-cache-render');
     void demoId;
+  });
+
+  await step('rename a video and delete it from the dashboard', async () => {
+    await page.goto(`${BASE}/p/${introId}`);
+    const title = page.getByLabel('Video name');
+    await title.fill('Renamed intro');
+    await title.press('Enter');
+    await page.goto(BASE);
+    await page.getByText('Renamed intro').waitFor();
+    const card = page.getByRole('link', { name: /Renamed intro/ });
+    await card.hover();
+    await page.getByRole('button', { name: 'More actions for Renamed intro' }).click();
+    await page.getByRole('menuitem', { name: /Delete video/ }).click();
+    await page.getByRole('button', { name: 'Delete video' }).click();
+    await card.waitFor({ state: 'detached' });
+    await shot('60-dashboard-after-delete');
   });
 
   summary();

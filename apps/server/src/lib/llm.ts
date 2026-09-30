@@ -122,7 +122,7 @@ export interface AssistantTurn {
 
 interface StreamChunk {
   choices?: Array<{
-    delta?: { content?: string | null; tool_calls?: Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }> };
+    delta?: { content?: string | null; tool_calls?: Array<{ index?: number; id?: string; function?: { name?: string; arguments?: string } }> };
   }>;
   error?: { message?: string };
 }
@@ -158,7 +158,9 @@ export async function streamChat(
       onText(delta.content);
     }
     for (const part of delta?.tool_calls ?? []) {
-      const call = (calls[part.index] ??= { id: '', type: 'function', function: { name: '', arguments: '' } });
+      // Some providers leave out `index`: a new id starts a new call, anything else continues the last one.
+      const index = part.index ?? (part.id ? calls.length : Math.max(0, calls.length - 1));
+      const call = (calls[index] ??= { id: '', type: 'function', function: { name: '', arguments: '' } });
       if (part.id) call.id = part.id;
       if (part.function?.name) call.function.name += part.function.name;
       if (part.function?.arguments) call.function.arguments += part.function.arguments;

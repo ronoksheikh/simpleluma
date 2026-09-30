@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { migrateDatabase } from './db/index.js';
 import './lib/crypto.js';
 import { protectData } from './lib/permissions.js';
+import { closeBrowser } from './render/browser.js';
 import { recoverInterruptedRenders } from './render/service.js';
 
 // Files created by the server must stay writable by the sandbox user's group.
@@ -14,3 +15,9 @@ protectData();
 
 const app = await buildApp();
 await app.listen({ port: config.port, host: config.host });
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    void app.close().then(closeBrowser).finally(() => process.exit(0));
+  });
+}

@@ -34,11 +34,12 @@ function status(share: ShareInfo): { label: string; color: 'success' | 'default'
 export function ShareDialog({ projectId, share, onClose }: { projectId: string; share: ShareTarget | null; onClose: () => void }) {
   const client = useQueryClient();
   const [expiry, setExpiry] = useState<string>('never');
-  const { data: shares = [] } = useQuery({
+  const { data: all = [] } = useQuery({
     queryKey: ['shares', projectId],
     queryFn: () => api.get<ShareInfo[]>(`/api/projects/${projectId}/shares`),
     enabled: share !== null,
   });
+  const shares = all.filter((s) => s.kind === share?.kind && (!share.target || s.target === share.target));
   const refresh = () => client.invalidateQueries({ queryKey: ['shares', projectId] });
 
   const create = useMutation({

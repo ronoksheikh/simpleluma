@@ -77,11 +77,6 @@ export async function show(dir: string, sha: string): Promise<string> {
   return git(dir, ['show', '--format=', '--patch', '--no-color', '--find-renames', '--root', sha]);
 }
 
-export async function diffWorking(dir: string): Promise<string> {
-  await git(dir, ['add', '-A']);
-  return git(dir, ['diff', '--cached', '--no-color', '--find-renames']);
-}
-
 /** Make the working tree match `sha`, as a new commit on top of history. */
 export async function restore(dir: string, sha: string): Promise<string | null> {
   await git(dir, ['read-tree', '--reset', '-u', sha]);
