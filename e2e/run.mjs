@@ -359,6 +359,19 @@ try {
     await shot('60-dashboard-after-delete');
   });
 
+  await step('log out and back in (wrong password is refused)', async () => {
+    await page.goto(BASE);
+    await page.getByRole('button', { name: 'Log out' }).click();
+    await page.waitForURL('**/login');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill('not the password');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.getByText('Wrong email or password.').waitFor();
+    await page.getByLabel('Password').fill('correct horse battery');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.waitForURL(BASE + '/');
+  });
+
   summary();
 } finally {
   await browser.close();

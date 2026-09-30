@@ -1,6 +1,7 @@
 import { Button, Spinner, TextArea } from '@heroui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { notify } from '../../lib/notify';
 import { useProjectEvents, type ServerEvent } from '../../lib/realtime';
@@ -161,7 +162,7 @@ export function ChatPanel({ projectId, attachments }: { projectId: string; attac
 
       <div className="border-t border-night/10 p-3">
         {hasModel === false && (
-          <p className="mb-2 rounded-xl bg-lumablue/5 px-3 py-2 text-sm">Connect a model in <a className="font-medium text-lumablue" href="/settings">Settings</a> to start.</p>
+          <p className="mb-2 rounded-xl bg-lumablue/5 px-3 py-2 text-sm">Connect a model in <Link className="font-medium text-lumablue" to="/settings">Settings</Link> to start.</p>
         )}
         {attachments.length > 0 && (
           <ul className="mb-2 flex flex-wrap gap-1.5" aria-label="Attachments">

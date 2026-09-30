@@ -2,6 +2,7 @@ import './config.js';
 import { buildApp } from './app.js';
 import { config } from './config.js';
 import { migrateDatabase } from './db/index.js';
+import { purgeExpiredSessions } from './lib/auth.js';
 import './lib/crypto.js';
 import { protectData } from './lib/permissions.js';
 import { closeBrowser } from './render/browser.js';
@@ -11,6 +12,7 @@ import { recoverInterruptedRenders } from './render/service.js';
 process.umask(0o002);
 migrateDatabase();
 recoverInterruptedRenders();
+purgeExpiredSessions();
 protectData();
 
 const app = await buildApp();

@@ -1,4 +1,4 @@
-import { Button, Dropdown, FieldError, Input, Label, Modal, Skeleton, TextField } from '@heroui/react';
+import { Button, Dropdown, FieldError, Input, Label, Modal, Skeleton, TextField, buttonVariants } from '@heroui/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -94,10 +94,11 @@ function ProjectCard({ project, onDelete }: { project: ProjectSummary; onDelete:
         </div>
       </Link>
       <Dropdown>
-        <Dropdown.Trigger className="absolute right-3 top-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-          <Button isIconOnly size="sm" variant="secondary" aria-label={`More actions for ${project.name}`}>
-            <span aria-hidden className="text-lg leading-none">⋯</span>
-          </Button>
+        <Dropdown.Trigger
+          aria-label={`More actions for ${project.name}`}
+          className={`${buttonVariants({ isIconOnly: true, size: 'sm', variant: 'secondary' })} absolute right-3 top-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100`}
+        >
+          <span aria-hidden className="text-lg leading-none">⋯</span>
         </Dropdown.Trigger>
         <Dropdown.Popover>
           <Dropdown.Menu onAction={(key) => key === 'delete' && onDelete()}>

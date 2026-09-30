@@ -1,4 +1,4 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { db, schema } from '../db/index.js';
 import { HttpError } from './errors.js';
@@ -16,6 +16,10 @@ declare module 'fastify' {
   interface FastifyRequest {
     user: User;
   }
+}
+
+export function purgeExpiredSessions(): void {
+  db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, Date.now())).run();
 }
 
 export function createSession(userId: string, reply: FastifyReply): void {

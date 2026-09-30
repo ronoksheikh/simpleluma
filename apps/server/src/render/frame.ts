@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { config } from '../config.js';
 import { randomToken } from '../lib/crypto.js';
@@ -51,11 +51,21 @@ export function captureFrame(projectId: string, seconds: number, height = 540): 
       await mkdir(framesDir(projectId), { recursive: true });
       const file = resolve(framesDir(projectId), name);
       await writeFile(file, jpeg);
+      await pruneFrames(framesDir(projectId));
       return { file, name, time: index / fps, stats: await page.stats(index), errors };
     } finally {
       await page.close();
     }
   });
+}
+
+/** Stills the agent captured are only useful for a while; thumbnails stay until the project changes. */
+async function pruneFrames(dir: string): Promise<void> {
+  const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+  for (const name of await readdir(dir)) {
+    const file = resolve(dir, name);
+    if (!name.startsWith('thumb-') && (await stat(file)).mtimeMs < cutoff) await rm(file, { force: true });
+  }
 }
 
 /** Cached poster image for the dashboard, refreshed when the project's latest commit changes. */

@@ -14,7 +14,7 @@ import { buildSystemPrompt } from './prompt.js';
 import { executeTool, toolSpecs } from './tools.js';
 
 const MAX_STEPS = 40;
-const CONTEXT_CHAR_BUDGET = 320_000;
+const CONTEXT_CHAR_BUDGET = 240_000;
 
 const runs = new Map<string, AbortController>();
 
@@ -66,6 +66,7 @@ async function run(project: Project, userId: string, text: string, origin: strin
 
   try {
     for (let step = 0; step < MAX_STEPS; step++) {
+      if (signal.aborted) return;
       compact(messages);
       const turn = await completeTurn();
       if (!turn.content && !turn.toolCalls.length) {
@@ -132,12 +133,27 @@ function dropOldImages(messages: ChatMessage[]): void {
   });
 }
 
-/** Shrink the oldest tool output when the conversation grows too large for the model's context. */
+const BULKY_ARGUMENTS = ['content', 'old_string', 'new_string'];
+
+/** Drop the file bodies out of an old tool call: the file itself is still in the project, and `read_file` brings it back. */
+function slimToolCall(call: ToolCall): ToolCall {
+  try {
+    const args = JSON.parse(call.function.arguments) as Record<string, unknown>;
+    for (const key of BULKY_ARGUMENTS) if (typeof args[key] === 'string' && args[key].length > 300) args[key] = '[omitted: read the file to see it]';
+    return { ...call, function: { ...call.function, arguments: JSON.stringify(args) } };
+  } catch {
+    return call;
+  }
+}
+
+/** Shrink the oldest tool calls and outputs when the conversation grows too large for the model's context. */
 function compact(messages: ChatMessage[]): void {
-  const size = (): number => messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 400), 0);
+  const size = (): number =>
+    messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 400) + (m.role === 'assistant' ? JSON.stringify(m.tool_calls ?? []).length : 0), 0);
   for (let i = 1; i < messages.length - 8 && size() > CONTEXT_CHAR_BUDGET; i++) {
     const m = messages[i]!;
     if (m.role === 'tool' && m.content.length > 400) messages[i] = { ...m, content: `${m.content.slice(0, 300)}\n… [output removed to save space]` };
+    if (m.role === 'assistant' && m.tool_calls) messages[i] = { ...m, tool_calls: m.tool_calls.map(slimToolCall) };
   }
 }
 

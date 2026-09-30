@@ -70,7 +70,8 @@ export function runAgentCommand(projectId: string, command: string, secrets: Rec
     timedOut = true;
     kill();
   }, timeoutMs);
-  signal.addEventListener('abort', kill, { once: true });
+  if (signal.aborted) kill();
+  else signal.addEventListener('abort', kill, { once: true });
   return new Promise((resolve) => {
     pty.onExit(({ exitCode }) => {
       clearTimeout(timer);
@@ -98,7 +99,7 @@ function startUserTerminal(projectId: string, userId: string, secrets: Record<st
   const redactor = new Redactor(secrets);
   const pty = spawn('bash', ['--noprofile', '--norc', '-i'], {
     cwd: projectDir(projectId),
-    env: { ...commandEnv(secrets), PS1: '\\[\\e[38;5;75m\\]\\W\\[\\e[0m\\] $ ' } as Record<string, string>,
+    env: { ...commandEnv(secrets), PS1: '\\[\\e[38;5;75m\\]luma\\[\\e[0m\\] $ ' } as Record<string, string>,
     cols: 100,
     rows: 16,
     ...sandboxUser,

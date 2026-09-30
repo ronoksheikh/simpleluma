@@ -115,6 +115,8 @@ export async function testModel(endpoint: Endpoint, model: string): Promise<void
   }
 }
 
+const STALL_MS = 120_000;
+
 export interface AssistantTurn {
   content: string;
   toolCalls: ToolCall[];
@@ -134,11 +136,35 @@ export async function streamChat(
   signal: AbortSignal,
   onText: (delta: string) => void,
 ): Promise<AssistantTurn> {
-  const res = await request(endpoint, '/chat/completions', {
-    method: 'POST',
-    signal,
-    body: JSON.stringify({ ...body, stream: true, tool_choice: 'auto' }),
-  });
+  // A provider that goes quiet would leave the run hanging: give up when nothing arrives for a while.
+  const stall = new AbortController();
+  let stalled = false;
+  let watchdog: NodeJS.Timeout | undefined;
+  const arm = (): void => {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      stalled = true;
+      stall.abort();
+    }, STALL_MS);
+  };
+  arm();
+
+  try {
+    const res = await request(endpoint, '/chat/completions', {
+      method: 'POST',
+      signal: AbortSignal.any([signal, stall.signal]),
+      body: JSON.stringify({ ...body, stream: true, tool_choice: 'auto' }),
+    });
+    return await readStream(res, arm, onText);
+  } catch (e) {
+    if (stalled) throw badRequest('The model stopped responding. Try again, or pick another model in Settings.');
+    throw e;
+  } finally {
+    clearTimeout(watchdog);
+  }
+}
+
+async function readStream(res: Response, onChunk: () => void, onText: (delta: string) => void): Promise<AssistantTurn> {
   if (!res.body) throw badRequest('The provider sent an empty response.');
 
   let content = '';
@@ -168,6 +194,7 @@ export async function streamChat(
   };
 
   for await (const piece of res.body as unknown as AsyncIterable<Uint8Array>) {
+    onChunk();
     buffer += decoder.decode(piece, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() ?? '';
