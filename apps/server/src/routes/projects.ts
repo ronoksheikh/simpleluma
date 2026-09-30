@@ -1,0 +1,110 @@
+import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
+import { db, schema } from '../db/index.js';
+import { eq } from 'drizzle-orm';
+import { badRequest } from '../lib/errors.js';
+import * as gitRepo from '../lib/git.js';
+import { parse } from '../lib/validate.js';
+import { readVideoConfig } from '../projects/manifest.js';
+import {
+  addAttachments, contentType, createProject, deleteProject, getProject, listAttachments, listProjects,
+  projectDir, readProjectFile, removeAttachment, restoreVersion,
+} from '../projects/service.js';
+import { workingTree } from '../projects/source.js';
+import { treeToken } from './tree.js';
+
+const PREVIEW_TOKEN_MS = 12 * 3600 * 1000;
+const sha = z.string().regex(/^[0-9a-f]{7,40}$/, 'Invalid version');
+
+export const projectRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/api/projects', async (req) =>
+    listProjects(req.user.id).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, updatedAt: p.updatedAt })),
+  );
+
+  app.post('/api/projects', async (req) => {
+    const body = parse(z.object({ name: z.string().trim().min(1, 'Name your video').max(80), template: z.enum(['blank', 'demo']).default('blank') }), req.body);
+    const project = await createProject(req.user.id, body.name, body.template);
+    return { id: project.id };
+  });
+
+  app.get<{ Params: { id: string } }>('/api/projects/:id', async (req) => {
+    const project = getProject(req.user.id, req.params.id);
+    const dir = projectDir(project.id);
+    return {
+      id: project.id,
+      name: project.name,
+      updatedAt: project.updatedAt,
+      video: await readVideoConfig(workingTree(dir)).catch(() => null),
+      attachments: await listAttachments(project.id),
+      head: await gitRepo.head(dir),
+    };
+  });
+
+  app.patch<{ Params: { id: string } }>('/api/projects/:id', async (req) => {
+    const project = getProject(req.user.id, req.params.id);
+    const { name } = parse(z.object({ name: z.string().trim().min(1).max(80) }), req.body);
+    db.update(schema.projects).set({ name }).where(eq(schema.projects.id, project.id)).run();
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/projects/:id', async (req) => {
+    await deleteProject(getProject(req.user.id, req.params.id));
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>('/api/projects/:id/preview-token', async (req) => {
+    const project = getProject(req.user.id, req.params.id);
+    return { base: `/t/${treeToken(project.id, 'work', PREVIEW_TOKEN_MS)}` };
+  });
+
+  // History ------------------------------------------------------------------------------------
+
+  app.get<{ Params: { id: string } }>('/api/projects/:id/history', async (req) =>
+    gitRepo.log(projectDir(getProject(req.user.id, req.params.id).id)),
+  );
+
+  app.get<{ Params: { id: string; sha: string } }>('/api/projects/:id/commits/:sha', async (req) => {
+    const project = getProject(req.user.id, req.params.id);
+    const commit = parse(sha, req.params.sha);
+    return { patch: await gitRepo.show(projectDir(project.id), commit) };
+  });
+
+  app.post<{ Params: { id: string } }>('/api/projects/:id/restore', async (req) => {
+    const project = getProject(req.user.id, req.params.id);
+    const body = parse(z.object({ sha }), req.body);
+    return { commit: await restoreVersion(project.id, body.sha) };
+  });
+
+  // Files and attachments ----------------------------------------------------------------------
+
+  app.get<{ Params: { id: string } }>('/api/projects/:id/files', async (req) =>
+    (await workingTree(projectDir(getProject(req.user.id, req.params.id).id)).list()).sort(),
+  );
+
+  app.get<{ Params: { id: string; '*': string } }>('/api/projects/:id/files/*', async (req, reply) => {
+    const project = getProject(req.user.id, req.params.id);
+    const path = req.params['*'];
+    const data = await readProjectFile(project.id, path);
+    // Files come from the agent or the sandbox: never let the browser run them in the app's origin.
+    return reply
+      .header('content-security-policy', 'sandbox')
+      .header('x-content-type-options', 'nosniff')
+      .header('cache-control', 'no-cache')
+      .type(contentType(path))
+      .send(data);
+  });
+
+  app.post<{ Params: { id: string } }>('/api/projects/:id/attachments', async (req) => {
+    const project = getProject(req.user.id, req.params.id);
+    const files: Array<{ filename: string; data: Buffer }> = [];
+    for await (const part of req.files()) files.push({ filename: part.filename, data: await part.toBuffer() });
+    if (!files.length) throw badRequest('Choose at least one file.');
+    return { added: await addAttachments(project.id, files) };
+  });
+
+  app.delete<{ Params: { id: string; name: string } }>('/api/projects/:id/attachments/:name', async (req) => {
+    await removeAttachment(getProject(req.user.id, req.params.id).id, req.params.name);
+    return { ok: true };
+  });
+
+};

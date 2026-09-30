@@ -1,0 +1,13 @@
+services:
+  studio:
+    build: .
+    init: true
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    shm_size: 1gb
+    environment:
+      # Optional: encrypts API keys with this secret instead of a generated key file in ./data.
+      LUMA_SECRET_KEY: ${LUMA_SECRET_KEY:-}
+    restart: unless-stopped

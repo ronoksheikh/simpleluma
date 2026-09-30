@@ -1,0 +1,21 @@
+{
+  "name": "luma-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w @luma/motion && npm run build -w @luma/web && npm run build -w @luma/server",
+    "dev:server": "npm run dev -w @luma/server",
+    "dev:web": "npm run dev -w @luma/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "start": "node apps/server/dist/index.js",
+    "test": "npm test -w @luma/server"
+  }
+}

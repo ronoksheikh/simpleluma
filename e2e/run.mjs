@@ -1,0 +1,321 @@
+// The "done when" journey, end to end, against a running Luma Studio (docker compose up).
+//   LUMA_URL=http://localhost:3000 MOCK_LLM_URL=http://host.docker.internal:4010/v1 node e2e/run.mjs
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { BASE, LLM_URL, SHOTS, launch, step, summary } from './lib.mjs';
+
+mkdirSync(SHOTS, { recursive: true });
+const SECRET_VALUE = 'sup3r-s3cret-value-12345';
+const { browser, context, page } = await launch();
+const email = `user${Date.now()}@example.com`;
+
+const shot = (name) => page.screenshot({ path: `${SHOTS}/${name}.png` });
+const playerFrame = () => page.frames().find((f) => f.url().includes('/player'));
+const expectText = async (locator, text, timeout = 30_000) => locator.filter({ hasText: text }).first().waitFor({ timeout });
+const probe = (file) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', file]).toString());
+
+async function waitForPlayer(expectedClock) {
+  await page.waitForFunction(() => [...document.querySelectorAll('iframe')].length > 0, null, { timeout: 15_000 });
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const f = playerFrame();
+    const text = f && (await f.evaluate(() => (document.body.dataset.ready ? document.querySelector('#time')?.textContent : null)).catch(() => null));
+    if (text && (!expectedClock || text.endsWith(expectedClock))) return text;
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`Player did not show ${expectedClock ?? 'a ready state'}`);
+}
+
+async function chat(text) {
+  await page.getByLabel('Message').fill(text);
+  await page.getByRole('button', { name: 'Send' }).click();
+}
+const agentIdle = () => page.getByRole('button', { name: 'Stop' }).waitFor({ state: 'detached', timeout: 120_000 });
+async function projectIdFromUrl() {
+  return new URL(page.url()).pathname.split('/').pop();
+}
+async function newVideo(name, template) {
+  await page.goto(BASE);
+  await page.getByRole('button', { name: 'New video' }).first().click();
+  await page.getByLabel('Name').fill(name);
+  if (template) await page.getByRole('radio', { name: new RegExp(template) }).click();
+  await page.getByRole('button', { name: 'Create video' }).click();
+  await page.waitForURL('**/p/*');
+  return projectIdFromUrl();
+}
+async function renderAndWait(button) {
+  await page.getByRole('button', { name: button }).click();
+  await page.getByRole('tab', { name: 'Renders' }).waitFor();
+  await page.locator('video').first().waitFor({ timeout: 240_000 });
+}
+
+try {
+  // 1 + 2 ----------------------------------------------------------------------------------------
+  await step('sign up and connect a model', async () => {
+    await page.goto(BASE + '/signup');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill('correct horse battery');
+    await page.getByRole('button', { name: 'Sign up' }).click();
+    await page.waitForURL('**/setup');
+    await page.getByRole('radio', { name: 'Custom' }).click();
+    await page.getByLabel('Base URL').fill(LLM_URL);
+    await page.getByLabel('API key').fill('test-key');
+    await page.getByText('2 models available.').waitFor();
+    await page.getByRole('combobox', { name: 'Model' }).fill('mock-tools');
+    await page.getByRole('button', { name: 'Test & save' }).click();
+    await page.waitForURL(BASE + '/');
+  });
+
+  // 3 + 5: chat with live tool cards and the live preview -----------------------------------------
+  let introId;
+  await step('create a video and ask for a 15-second logo intro: tool cards stream in', async () => {
+    introId = await newVideo('Lumademy logo intro');
+    await page.getByLabel('Message').waitFor();
+    await shot('10-studio-empty');
+    await chat('Make a 15-second Lumademy logo intro');
+    await expectText(page.locator('li'), 'Writing video.json', 20_000).catch(() => undefined);
+    await expectText(page.locator('div'), 'Wrote scenes/01-intro.js');
+    await expectText(page.locator('div'), 'Checked the frame at 4.5s');
+    await expectText(page.locator('div'), 'Saved: Add Lumademy logo intro');
+    await expectText(page.locator('div'), 'Rendered quick preview', 120_000);
+    await expectText(page.locator('p'), 'Your 15-second Lumademy logo intro is ready');
+    await agentIdle();
+    await shot('11-studio-intro');
+  });
+
+  await step('live preview reloaded with the new 15 s video and plays', async () => {
+    const clock = await waitForPlayer('0:15.0');
+    console.log('   preview clock:', clock);
+    const f = playerFrame();
+    await f.click('#big');
+    await page.waitForTimeout(1800);
+    const now = await f.evaluate(() => document.querySelector('#time').textContent);
+    if (now.startsWith('0:00.0 /')) throw new Error('the preview did not advance while playing');
+    await f.click('#play');
+    await shot('12-preview-playing');
+  });
+
+  // 6: rendering with progress, final MP4 -----------------------------------------------------------
+  await step('final 1080p render: progress, playback and download', async () => {
+    await page.getByRole('button', { name: 'Final 1080p' }).click();
+    await page.getByRole('progressbar').first().waitFor({ timeout: 30_000 });
+    await shot('13-render-progress');
+    await page.getByText('Render complete').waitFor({ timeout: 240_000 });
+    await shot('14-render-complete');
+    const href = await page.getByRole('link', { name: 'Download' }).first().getAttribute('href');
+    const res = await page.request.get(BASE + href);
+    const file = `${SHOTS}/final.mp4`;
+    writeFileSync(file, await res.body());
+    const info = probe(file);
+    const video = info.streams.find((s) => s.codec_type === 'video');
+    const audio = info.streams.find((s) => s.codec_type === 'audio');
+    console.log(`   final.mp4: ${video.width}x${video.height} ${video.codec_name}, audio ${audio?.codec_name}, ${Number(info.format.duration).toFixed(2)}s`);
+    if (video.height !== 1080) throw new Error('final render is not 1080p');
+    if (!audio) throw new Error('final render has no audio');
+    if (Math.abs(Number(info.format.duration) - 15) > 0.2) throw new Error('final render is not 15 seconds');
+  });
+
+  // 5: history, diff, restore -----------------------------------------------------------------------
+  await step('history shows every change with its diff; restore brings back an older version', async () => {
+    await page.getByRole('tab', { name: 'History' }).click();
+    const commit = (message) => page.getByRole('button', { name: new RegExp(`^${message}`) });
+    await commit('Add Lumademy logo intro').waitFor();
+    await commit('Add Lumademy logo intro').click();
+    await page.getByText('scenes/01-intro.js').first().waitFor();
+    await shot('15-history-diff');
+    await commit('Create video').click();
+    await page.getByRole('button', { name: 'Restore this version' }).click();
+    await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.getByText(/Restore version/).first().waitFor();
+    const video = await (await page.request.get(`${BASE}/api/projects/${introId}/files/video.json`)).json();
+    if (video.duration !== 5) throw new Error(`expected the restored video.json to be 5 s, got ${video.duration}`);
+    await shot('16-history-restored');
+  });
+
+  // 4: attachments ------------------------------------------------------------------------------------
+  await step('attachments: SVG and PDF upload, agent reads brand colours, limit of 20 and type checks', async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#2970EC"/><circle cx="50" cy="50" r="30" fill="#5DAEFF"/></svg>';
+    const pdf = '%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 200]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 45>>stream\nBT /F1 18 Tf 20 100 Td (Brand brief: calm) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R/Size 6>>\n';
+    const upload = (files) => page.request.post(`${BASE}/api/projects/${introId}/attachments`, { multipart: Object.fromEntries(files.map((f, i) => [`f${i}`, f])) });
+    const ok = await upload([{ name: 'brand.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) }, { name: 'brief.pdf', mimeType: 'application/pdf', buffer: Buffer.from(pdf) }]);
+    if (!ok.ok()) throw new Error(`upload failed: ${await ok.text()}`);
+    const bad = await upload([{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hi') }]);
+    if (bad.status() !== 400) throw new Error('a .txt attachment should be rejected');
+    const many = await upload(Array.from({ length: 19 }, (_, i) => ({ name: `img${i}.svg`, mimeType: 'image/svg+xml', buffer: Buffer.from(svg) })));
+    const over = many.status() === 400 ? many : await upload([{ name: 'one-too-many.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) }]);
+    if (over.status() !== 400 || !(await over.text()).includes('up to 20')) throw new Error('the 20 attachment limit is not enforced');
+    await page.goto(`${BASE}/p/${introId}`);
+    await page.getByRole('tab', { name: 'Files' }).click();
+    await page.getByText('brand.svg').first().waitFor();
+    await shot('23-files-tab');
+    await chat('Read my brand files');
+    await expectText(page.locator('div'), 'Read assets/brief.pdf', 60_000);
+    await agentIdle();
+    const messages = (await (await page.request.get(`${BASE}/api/projects/${introId}/chat`)).json()).messages;
+    const svgResult = messages.find((m) => m.role === 'tool' && m.content.includes('assets/brand.svg'))?.content ?? '';
+    const pdfResult = messages.find((m) => m.role === 'tool' && m.content.includes('Brand brief'))?.content ?? '';
+    if (!/#2970ec/i.test(svgResult) || !/#5daeff/i.test(svgResult)) throw new Error(`the SVG colours were not reported: ${svgResult.slice(0, 200)}`);
+    if (!pdfResult) throw new Error('the PDF text was not extracted');
+    // Clean up so the rest of the journey has a tidy project.
+    for (const name of ['brand.svg', 'brief.pdf', ...Array.from({ length: 19 }, (_, i) => `img${i}.svg`)]) {
+      await page.request.delete(`${BASE}/api/projects/${introId}/attachments/${name}`);
+    }
+  });
+
+  // 9: terminal + secrets ---------------------------------------------------------------------------
+  await step('settings: save a secret', async () => {
+    await page.goto(BASE + '/settings');
+    await page.getByLabel('Name', { exact: true }).fill('MY_TOKEN');
+    await page.getByLabel('Value').fill(SECRET_VALUE);
+    await page.getByRole('button', { name: 'Save secret' }).click();
+    await page.getByText('MY_TOKEN').first().waitFor();
+    await shot('20-settings-secrets');
+  });
+
+  await step('terminal: user shell works in the project folder and hides secrets', async () => {
+    await page.goto(`${BASE}/p/${introId}`);
+    await page.getByRole('tab', { name: 'Terminal' }).click();
+    await page.locator('.xterm').first().waitFor();
+    await page.locator('.xterm-helper-textarea').first().focus();
+    await page.keyboard.type('ls && echo "token=$MY_TOKEN"\n');
+    await page.waitForFunction(() => document.body.innerText.includes('token=[secret:MY_TOKEN]'), null, { timeout: 15_000 });
+    const text = await page.locator('.xterm-rows').first().innerText();
+    if (text.includes(SECRET_VALUE)) throw new Error('the secret value leaked into the terminal');
+    if (!text.includes('video.json')) throw new Error('ls did not list the project files');
+    await shot('21-terminal');
+  });
+
+  await step("agent commands show live in the Agent tab, secret redacted", async () => {
+    await chat('Run the command that uses my secret');
+    await page.getByRole('tab', { name: 'Agent' }).click();
+    await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows')].some((el) => el.textContent.includes('token is [secret:MY_TOKEN]')), null, { timeout: 60_000 });
+    await agentIdle();
+    const all = JSON.stringify(await (await page.request.get(`${BASE}/api/projects/${introId}/chat`)).json());
+    if (all.includes(SECRET_VALUE)) throw new Error('the secret value is in the stored conversation');
+    await shot('22-agent-terminal');
+  });
+
+  // 8: ElevenLabs ------------------------------------------------------------------------------------
+  await step('settings: ElevenLabs Test shows voices and quota; Save only after a passing test', async () => {
+    await page.goto(BASE + '/settings');
+    const key = page.getByLabel('API key').last();
+    await key.fill('bad-key');
+    await page.getByRole('button', { name: 'Test', exact: true }).click();
+    await page.getByText('ElevenLabs rejected this API key').waitFor();
+    if (!(await page.getByRole('button', { name: 'Save', exact: true }).isDisabled())) throw new Error('Save was enabled without a passing test');
+    await key.fill('el-test-key');
+    await page.getByRole('button', { name: 'Test', exact: true }).click();
+    await page.getByText(/Key works · 2 voices/).waitFor();
+    await page.getByText(/8,800 of 10,000 characters left/).waitFor();
+    await shot('30-elevenlabs-test');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByText(/A key ending/).waitFor();
+  });
+
+  await step('voice-over: generated with timestamps, captions follow the words', async () => {
+    await page.goto(`${BASE}/p/${introId}`);
+    await chat('Add a voice-over with captions');
+    await expectText(page.locator('div'), 'Generated voice “intro”', 90_000);
+    await expectText(page.locator('div'), 'Saved: Add voice-over and captions', 60_000);
+    await agentIdle();
+    const clip = await (await page.request.get(`${BASE}/api/projects/${introId}/files/audio/voice/intro.json`)).json();
+    const first = clip.words[0];
+    console.log(`   voice: "${clip.text}" at ${clip.at}s, ${clip.words.length} words, "${first.text}" ${first.start.toFixed(2)}–${first.end.toFixed(2)}s`);
+    if (clip.words.length !== 6) throw new Error(`expected 6 timed words, got ${clip.words.length}`);
+    await page.getByRole('tab', { name: 'Audio' }).click();
+    await page.locator('audio').first().waitFor();
+    await shot('31-audio-tab');
+    // The captured frame at 2.0 s shows the caption for "Lumademy." lit up.
+    await page.getByRole('tab', { name: 'Preview' }).click();
+    await waitForPlayer();
+    const f = playerFrame();
+    await f.evaluate(() => { document.querySelector('#scrub').value = 2000; document.querySelector('#scrub').dispatchEvent(new Event('input')); });
+    await page.waitForTimeout(500);
+    await shot('32-captions-frame');
+  });
+
+  // 7: share links ------------------------------------------------------------------------------------
+  let shareUrl;
+  await step('share a preview version: a logged-out visitor can play it', async () => {
+    await page.getByRole('button', { name: 'Share preview' }).click();
+    await page.getByRole('button', { name: 'Create link' }).click();
+    await page.getByLabel('Share link').first().waitFor();
+    shareUrl = await page.getByLabel('Share link').first().inputValue();
+    await shot('40-share-dialog');
+    const visitor = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const vp = await visitor.newPage();
+    await vp.goto(shareUrl);
+    await vp.waitForFunction(() => [...document.querySelectorAll('iframe')].length > 0);
+    const deadline = Date.now() + 20_000;
+    let clock = null;
+    while (Date.now() < deadline && !clock) {
+      const f = vp.frames().find((x) => x.url().includes('/player'));
+      clock = f && (await f.evaluate(() => (document.body.dataset.ready ? document.querySelector('#time').textContent : null)).catch(() => null));
+      if (!clock) await vp.waitForTimeout(300);
+    }
+    if (!clock) throw new Error('the public player did not load');
+    console.log('   visitor sees:', clock);
+    await vp.screenshot({ path: `${SHOTS}/41-public-player.png` });
+    await visitor.close();
+  });
+
+  await step('revoking the link turns it off for visitors', async () => {
+    await page.getByRole('button', { name: 'Turn off' }).first().click();
+    await page.getByText('Turned off').first().waitFor();
+    const visitor = await browser.newContext();
+    const vp = await visitor.newPage();
+    await vp.goto(shareUrl);
+    await vp.getByText('This link is not available').waitFor();
+    await vp.screenshot({ path: `${SHOTS}/42-link-off.png` });
+    await visitor.close();
+    await page.getByRole('button', { name: /close/i }).first().click();
+  });
+
+  await step('share a render: visitor gets the MP4 without logging in; expiry is enforced', async () => {
+    await page.getByRole('tab', { name: 'Renders' }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Create link' }).click();
+    await page.getByLabel('Share link').first().waitFor();
+    const url = await page.getByLabel('Share link').first().inputValue();
+    const token = url.split('/s/')[1];
+    const visitor = await browser.newContext();
+    const vp = await visitor.newPage();
+    await vp.goto(url);
+    await vp.locator('video').waitFor();
+    await vp.waitForFunction(() => document.querySelector('video').readyState >= 1, null, { timeout: 15_000 });
+    const duration = await vp.evaluate(() => document.querySelector('video').duration);
+    console.log(`   visitor video duration: ${duration}s`);
+    if (!(duration > 4)) throw new Error('shared render has no duration');
+    await visitor.close();
+    const ok = await fetch(`${BASE}/api/share/${token}`);
+    if (ok.status !== 200) throw new Error('share info should be public');
+    await page.getByRole('button', { name: /close/i }).first().click();
+  });
+
+  // 6 (cache) ----------------------------------------------------------------------------------------
+  await step('editing one scene of a long video re-renders only that scene', async () => {
+    const demoId = await newVideo('Demo reel', 'Demo reel');
+    await page.getByRole('button', { name: 'Quick preview' }).click();
+    await page.getByRole('tab', { name: 'Renders' }).waitFor();
+    await page.getByText(/scenes rendered/).first().waitFor({ timeout: 180_000 });
+    const first = await page.getByText(/scenes rendered/).first().innerText();
+    console.log('   first render:', first);
+    await page.getByRole('tab', { name: 'Terminal' }).click();
+    await page.locator('.xterm-helper-textarea').first().focus();
+    await page.waitForTimeout(800);
+    await page.keyboard.type("sed -i 's/one frame at a time/one frame at a time!/' scenes/03-chart.js && echo edited\n");
+    await page.waitForFunction(() => document.body.innerText.includes('edited'), null, { timeout: 15_000 });
+    await page.getByRole('button', { name: 'Quick preview' }).click();
+    await page.waitForFunction(() => document.querySelectorAll('video').length >= 2, null, { timeout: 180_000 });
+    const second = await page.getByText(/scenes rendered/).first().innerText();
+    console.log('   after editing scene 3:', second);
+    const m = /(\d+) of (\d+) scenes rendered, (\d+) reused/.exec(second);
+    if (!m || Number(m[1]) >= Number(m[2]) || Number(m[3]) === 0) throw new Error(`expected a partial re-render, got "${second}"`);
+    await shot('50-cache-render');
+    void demoId;
+  });
+
+  summary();
+} finally {
+  await browser.close();
+}

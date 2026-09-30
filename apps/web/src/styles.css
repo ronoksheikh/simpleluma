@@ -1,0 +1,88 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "@fontsource-variable/inter/opsz.css";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --color-lumablue: #2970ec;
+  --color-sky: #5daeff;
+  --color-royal: #1557d1;
+  --color-deep: #07358f;
+  --color-offwhite: #eff5ff;
+  --color-night: #071738;
+}
+
+/* Lumademy palette on top of the HeroUI theme tokens. */
+:root,
+[data-theme="light"] {
+  --background: #eff5ff;
+  --foreground: #071738;
+  --surface: #ffffff;
+  --surface-foreground: #071738;
+  --overlay: #ffffff;
+  --overlay-foreground: #071738;
+  --muted: rgb(7 23 56 / 0.58);
+  --accent: #2970ec;
+  --accent-hover: #1557d1;
+  --accent-foreground: #ffffff;
+  --focus: #5daeff;
+  --link: #2970ec;
+  --border: rgb(7 23 56 / 0.1);
+  --separator: rgb(7 23 56 / 0.08);
+  --default: rgb(41 112 236 / 0.08);
+  --default-foreground: #071738;
+  --field-background: #ffffff;
+  --field-border: rgb(7 23 56 / 0.14);
+  --field-border-width: 1px;
+  --radius: 0.75rem;
+  /* No orange anywhere: status "warning" uses the brand blue. */
+  --warning: #1557d1;
+  --warning-foreground: #ffffff;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* "Luma Studio" is set in Inter Display Medium: the optical-size axis at its display end. */
+.wordmark {
+  font-weight: 500;
+  font-variation-settings: "opsz" 32;
+  letter-spacing: -0.02em;
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, #5daeff 0%, #2970ec 37%, #1557d1 72%, #07358f 100%);
+}
+
+.xterm {
+  padding: 8px 10px;
+  height: 100%;
+}
+.xterm-viewport {
+  background-color: transparent !important;
+}
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(7 23 56 / 0.2) transparent;
+}
+
+/* Primary buttons carry the brand gradient; hover settles on Royal. */
+.button--primary {
+  background: linear-gradient(135deg, #5daeff 0%, #2970ec 37%, #1557d1 72%, #07358f 100%);
+  color: #ffffff;
+}
+.button--primary:hover:not([data-disabled]) {
+  background: #1557d1;
+}

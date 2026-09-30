@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Luma player</title>
+  <link rel="stylesheet" href="/motion/player.css" />
+  <script type="importmap">{ "imports": { "luma": "/motion/lib.js" } }</script>
+</head>
+<body>
+  <div id="frame"><canvas id="stage"></canvas></div>
+  <button id="big" aria-label="Play"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
+  <pre id="errors" hidden></pre>
+  <div id="controls">
+    <button id="play" aria-label="Play or pause">
+      <svg class="i-play" viewBox="0 0 24 24" width="20" height="20"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+      <svg class="i-pause" viewBox="0 0 24 24" width="20" height="20"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>
+    </button>
+    <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Seek" />
+    <span id="time">0:00.0</span>
+    <button id="mute" aria-label="Mute">
+      <svg class="i-sound" viewBox="0 0 24 24" width="20" height="20"><path d="M4 9v6h4l5 4V5L8 9zm11 .5a4 4 0 0 1 0 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="i-muted" viewBox="0 0 24 24" width="20" height="20"><path d="M4 9v6h4l5 4V5L8 9zm12 0 5 6m0-6-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="full" aria-label="Fullscreen"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+  <script type="module" src="/motion/player.js"></script>
+</body>
+</html>
