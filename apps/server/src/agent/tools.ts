@@ -19,12 +19,24 @@ import { elevenLabsKey } from '../routes/settings.js';
 import { DEFAULT_VOICE_MODEL, generateVoice } from '../voice/generate.js';
 import { listVoices } from '../voice/elevenlabs.js';
 import { config } from '../config.js';
+import { transform } from 'esbuild';
+import { BRAND_FILE, brandSchema, emptyBrand, readBrand, writeBrand } from '../brand/brand.js';
+import { fetchUrl } from './fetch.js';
+import { saveCheckpoint } from '../director/checkpoints.js';
+import { addMemory, removeMemory } from '../director/memory.js';
+import { formatTodos, replaceTodos } from '../director/todos.js';
+import { hub } from '../lib/hub.js';
+import { checkVideo, formatReport } from '../render/check.js';
+import { shootReference } from '../render/reference.js';
 
 const exec = promisify(execFile);
 
 export interface ToolContext {
   projectId: string;
   userId: string;
+  runId: string;
+  /** The current step of the run (model turns so far). */
+  step: number;
   /** Public address of the app, for share links. */
   origin: string;
   secrets: Record<string, string>;
@@ -106,7 +118,28 @@ const readFile = define(
   },
 );
 
-async function checkAfterWrite(ctx: ToolContext, path: string): Promise<string> {
+/** Catch mistakes at once: a syntax error in a scene, an invalid video.json or brand.json. */
+async function checkAfterWrite(ctx: ToolContext, path: string, content: string): Promise<string> {
+  if (/\.(m?js)$/.test(path)) {
+    try {
+      await transform(content, { loader: 'js', format: 'esm', sourcefile: path, logLevel: 'silent' });
+    } catch (e) {
+      const first = (e as { errors?: Array<{ text: string; location?: { line: number; column: number; lineText: string } }> }).errors?.[0];
+      const where = first?.location ? ` (line ${first.location.line}, column ${first.location.column + 1}: \`${first.location.lineText.trim().slice(0, 120)}\`)` : '';
+      return `\nSYNTAX ERROR in ${path}${where}: ${first?.text ?? String(e)}. Fix it now: the scene will not load.`;
+    }
+    return '';
+  }
+  if (path === BRAND_FILE) {
+    try {
+      const parsed = brandSchema.safeParse(JSON.parse(content));
+      if (!parsed.success) return `\nWarning: brand.json ${parsed.error.issues[0]?.path.join('.')} ${parsed.error.issues[0]?.message}`;
+      hub.publish(ctx.projectId, { type: 'brand.changed' });
+    } catch (e) {
+      return `\nWarning: brand.json is not valid JSON: ${e instanceof Error ? e.message : e}`;
+    }
+    return '';
+  }
   if (path !== 'video.json') return '';
   try {
     await readVideoConfig(workingTree(projectDir(ctx.projectId)));
@@ -131,8 +164,10 @@ const writeFile = define(
     await writeProjectFile(ctx.projectId, args.path, args.content);
     const patch = createTwoFilesPatch(args.path, args.path, before ?? '', args.content, '', '', { context: 3 });
     const { added, removed } = diffStat(patch);
+    const problem = await checkAfterWrite(ctx, args.path, args.content);
     return {
-      text: `${before === null ? 'Created' : 'Updated'} ${args.path} (+${added} −${removed}).${await checkAfterWrite(ctx, args.path)}`,
+      text: `${before === null ? 'Created' : 'Updated'} ${args.path} (+${added} −${removed}).${problem}`,
+      failed: problem.includes('SYNTAX ERROR'),
       meta: { diff: patch, added, removed, created: before === null },
     };
   },
@@ -152,7 +187,8 @@ const editFile = define(
     await writeProjectFile(ctx.projectId, args.path, after);
     const patch = createTwoFilesPatch(args.path, args.path, before, after, '', '', { context: 3 });
     const { added, removed } = diffStat(patch);
-    return { text: `Edited ${args.path} (+${added} −${removed}).${await checkAfterWrite(ctx, args.path)}`, meta: { diff: patch, added, removed } };
+    const problem = await checkAfterWrite(ctx, args.path, after);
+    return { text: `Edited ${args.path} (+${added} −${removed}).${problem}`, failed: problem.includes('SYNTAX ERROR'), meta: { diff: patch, added, removed } };
   },
 );
 
@@ -288,10 +324,164 @@ const sharePreview = define(
   },
 );
 
+const updatePlan = define(
+  'update_plan',
+  'Write the plan for the current job as a checklist the user sees. Send the FULL list every time (it replaces the old one). Keep exactly one item in_progress while working, and mark items done as soon as they are finished.',
+  obj({
+    items: {
+      type: 'array',
+      description: 'Every step of the plan, in order',
+      items: obj({ text: str('A short, concrete step, e.g. "Build the logo reveal (0–3s)"'), status: { type: 'string', enum: ['pending', 'in_progress', 'done'] } }, ['text', 'status']),
+    },
+  }, ['items']),
+  z.object({ items: z.array(z.object({ text: z.string().trim().min(1).max(300), status: z.enum(['pending', 'in_progress', 'done']) })).max(40) }),
+  async (args, ctx) => {
+    const todos = replaceTodos(ctx.projectId, args.items);
+    const done = todos.filter((t) => t.status === 'done').length;
+    return { text: `Plan saved (${done}/${todos.length} done):\n${formatTodos(todos)}`, meta: { done, total: todos.length } };
+  },
+);
+
+const remember = define(
+  'remember',
+  'Save a lasting note to memory. Use "project" for facts about this video (decisions, the client\'s feedback, what was approved) and "global" for the user\'s preferences that apply to every video (style, tone, things they dislike). Memory is shown to you in every conversation.',
+  obj({ content: str('One clear sentence to remember'), scope: { type: 'string', enum: ['project', 'global'], description: 'project (default) or global' } }, ['content']),
+  z.object({ content: z.string().trim().min(3).max(2000), scope: z.enum(['project', 'global']).optional() }),
+  async (args, ctx) => {
+    const m = addMemory(ctx.userId, args.scope === 'global' ? null : ctx.projectId, args.content, 'director');
+    return { text: `Remembered (${args.scope ?? 'project'}, id ${m.id}): ${m.content}`, meta: { memoryId: m.id, scope: args.scope ?? 'project' } };
+  },
+);
+
+const forget = define(
+  'forget',
+  'Remove a note from memory when it is wrong or out of date (use the id shown in your memory list).',
+  obj({ id: str('Memory id') }, ['id']),
+  z.object({ id: z.string().min(1) }),
+  async (args, ctx) => {
+    removeMemory(ctx.userId, args.id);
+    return { text: `Forgot memory ${args.id}.` };
+  },
+);
+
+const checkpointTool = define(
+  'checkpoint',
+  'Save a checkpoint on a long job: commits the work and records where you are, so you can resume after a restart or when older messages are trimmed. Write what is finished, decisions made, and what comes next.',
+  obj({ summary: str('Progress so far, key decisions, and the next steps') }, ['summary']),
+  z.object({ summary: z.string().trim().min(10).max(4000) }),
+  async (args, ctx) => {
+    const c = await saveCheckpoint(ctx.projectId, ctx.runId, ctx.step, args.summary, false);
+    return { text: `Checkpoint saved${c.sha ? ` at version ${c.sha.slice(0, 7)}` : ''}.`, meta: { checkpointId: c.id, sha: c.sha } };
+  },
+);
+
+const checkVideoTool = define(
+  'check_video',
+  'Health check of the whole video: loads it like the preview, draws sample frames across every scene, and reports load errors, scenes that throw (with the time), empty frames and timeline gaps. Run it after building or changing scenes, and before rendering.',
+  obj({}),
+  z.object({}),
+  async (_args, ctx) => {
+    const report = await checkVideo(ctx.projectId);
+    return { text: formatReport(report), failed: !report.ok, meta: { check: { ok: report.ok, errors: report.errors, warnings: report.warnings } } };
+  },
+);
+
+const viewReference = define(
+  'view_reference',
+  'Watch an HTML motion reference the user uploaded (references/*.html or any .html in assets/): returns a contact sheet of the page at the given seconds, plus its title and scripts. Use it to study the reference\'s layout, pacing and easing, then read its source with read_file for exact timings and colours.',
+  obj({ path: str('Path of the HTML file'), times: { type: 'array', items: { type: 'number' }, description: 'Seconds to photograph (up to 9), e.g. [0.5, 1.5, 3, 5]' } }, ['path']),
+  z.object({ path: z.string().regex(/\.html?$/i, 'Give an .html file'), times: z.array(z.number().min(0).max(600)).max(9).optional() }),
+  async (args, ctx) => {
+    await readProjectFile(ctx.projectId, args.path);
+    const shot = await shootReference(ctx.projectId, args.path, args.times?.length ? args.times : [0.5, 1.5, 3, 4.5, 6, 8]);
+    return {
+      text: [
+        `${args.path}${shot.title ? ` ("${shot.title}")` : ''}: contact sheet at ${shot.times.map((t) => `${t}s`).join(', ')} (left to right, top to bottom).`,
+        shot.duration ? `CSS/Web animations end at about ${shot.duration.toFixed(2)}s.` : '',
+        `Scripts: ${shot.scripts.join(', ') || 'none'}`,
+      ].filter(Boolean).join('\n'),
+      meta: { imageUrl: `/api/projects/${ctx.projectId}/frames/${shot.name}`, times: shot.times },
+      image: { mime: 'image/jpeg', base64: (await readLocalFile(shot.file)).toString('base64') },
+    };
+  },
+);
+
+const color = obj({ hex: str('#RRGGBB'), name: str('e.g. "Brand Blue"'), role: { type: 'string', enum: ['primary', 'secondary', 'accent', 'background', 'text', 'gradient', 'avoid'] }, usage: str('Where to use it') }, ['hex', 'role']);
+const updateBrand = define(
+  'update_brand',
+  'Write what you learned about the brand into brand.json (the Brand tab shows it, and you must follow it). Read the user\'s brand files first and use judgement: not every SVG is a logo, not every colour in a file is a brand colour. Fields you send replace the old ones; fields you leave out stay as they are.',
+  obj({
+    name: str('Brand name'),
+    colors: { type: 'array', items: color, description: 'The full colour list. Mark colours the brand forbids (or the user dislikes) as role "avoid".' },
+    gradients: { type: 'array', items: { type: 'string' }, description: 'CSS linear-gradient(...) strings' },
+    fonts: { type: 'array', items: obj({ family: str('Font family'), role: str('headings, text…') }, ['family']) },
+    logos: { type: 'array', items: obj({ path: str('Project path of the logo file'), use: str('When to use this version') }, ['path']) },
+    rules: { type: 'array', items: { type: 'string' }, description: 'Must-follow rules, one per item' },
+    tone: str('Tone of voice'),
+  }),
+  z.object({
+    name: z.string().max(120).optional(),
+    colors: z.array(z.object({ hex: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Colours are #RRGGBB'), name: z.string().max(80).default(''), role: z.enum(['primary', 'secondary', 'accent', 'background', 'text', 'gradient', 'avoid']), usage: z.string().max(300).default('') })).max(48).optional(),
+    gradients: z.array(z.string().max(400)).max(16).optional(),
+    fonts: z.array(z.object({ family: z.string().max(80), role: z.string().max(80).default('') })).max(12).optional(),
+    logos: z.array(z.object({ path: z.string().max(300), use: z.string().max(200).default('') })).max(24).optional(),
+    rules: z.array(z.string().max(400)).max(40).optional(),
+    tone: z.string().max(1000).optional(),
+  }),
+  async (args, ctx) => {
+    const files = new Set(await listProjectFiles(ctx.projectId));
+    const missing = (args.logos ?? []).filter((l) => !files.has(l.path)).map((l) => l.path);
+    if (missing.length) return fail(`These logo files do not exist: ${missing.join(', ')}. Use paths from list_files.`);
+    const current = (await readBrand(ctx.projectId)) ?? emptyBrand();
+    const defined = Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined));
+    const brand = await writeBrand(ctx.projectId, { ...current, ...defined, sources: current.sources }, 'Director: update brand.json');
+    return { text: `brand.json updated: ${brand.colors.length} colours, ${brand.logos.length} logos, ${brand.fonts.length} fonts, ${brand.rules.length} rules.`, meta: { brand: true } };
+  },
+);
+
+const searchFiles = define(
+  'search_files',
+  'Search the text of project files for a word or regular expression (scenes, scripts, references, docs). Returns matching lines with file and line number.',
+  obj({ pattern: str('Text or regular expression'), path: str('Only search under this folder or file (optional)') }, ['pattern']),
+  z.object({ pattern: z.string().min(1).max(200), path: z.string().max(300).optional() }),
+  async (args, ctx) => {
+    let re: RegExp;
+    try {
+      re = new RegExp(args.pattern, 'i');
+    } catch {
+      re = new RegExp(args.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    }
+    const files = (await listProjectFiles(ctx.projectId)).filter((f) => (!args.path || f.startsWith(args.path)) && /\.(m?js|json|md|txt|html?|css|svg)$/i.test(f));
+    const hits: string[] = [];
+    for (const f of files) {
+      const text = (await readProjectFile(ctx.projectId, f)).toString('utf8');
+      text.split('\n').forEach((line, i) => {
+        if (hits.length < 200 && re.test(line)) hits.push(`${f}:${i + 1}: ${line.trim().slice(0, 200)}`);
+      });
+    }
+    return { text: hits.length ? hits.join('\n') : 'No matches.' };
+  },
+);
+
+const fetchUrlTool = define(
+  'fetch_url',
+  'Read a public web page (returns its readable text, title and links) or download a file into the project (save_as, e.g. "assets/hero.jpg" or "assets/logo.svg"). Use it for a brand\'s website, a font, an image or a library the user points to.',
+  obj({ url: str('http(s) URL'), save_as: str('Optional project path to save the file to (assets/…)') }, ['url']),
+  z.object({ url: z.string().url().max(2000), save_as: z.string().regex(/^(assets|references)\/.+$/, 'Save into assets/ or references/').max(300).optional() }),
+  async (args, ctx) => {
+    const res = await fetchUrl(args.url, ctx.signal);
+    if (args.save_as) {
+      await writeProjectFile(ctx.projectId, args.save_as, res.body);
+      return { text: `Saved ${args.save_as} (${res.contentType}, ${(res.body.length / 1024).toFixed(0)} KB) from ${res.url}.` };
+    }
+    return { text: clip(res.text ?? `Binary file (${res.contentType}, ${res.body.length} bytes). Use save_as to keep it.`, 40_000) };
+  },
+);
+
 export const tools = [
-  listFiles, readFile, writeFile, editFile, deleteFile, commit,
-  renderTool('preview'), renderTool('final'), captureFrameTool, runCommand,
-  listVoicesTool, generateVoiceTool, sharePreview,
+  updatePlan, listFiles, readFile, searchFiles, writeFile, editFile, deleteFile, commit, checkpointTool, updateBrand, fetchUrlTool,
+  checkVideoTool, captureFrameTool, viewReference, renderTool('preview'), renderTool('final'), runCommand,
+  remember, forget, listVoicesTool, generateVoiceTool, sharePreview,
 ] as unknown as Array<Tool<z.ZodType>>;
 
 export const toolSpecs = (voiceAvailable: boolean): ToolSpec[] =>

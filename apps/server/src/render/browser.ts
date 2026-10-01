@@ -5,12 +5,13 @@ import { treeToken, type TreeRef } from '../routes/tree.js';
 
 let browser: Promise<Browser> | null = null;
 
-function getBrowser(): Promise<Browser> {
+export function getBrowser(): Promise<Browser> {
   if (!browser) {
     browser = chromium
       .launch({
         executablePath: config.chromiumPath,
-        args: ['--no-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required', '--font-render-hinting=none'],
+        // WebGL (Three.js scenes) runs on SwiftShader, so it works without a GPU and draws the same everywhere.
+        args: ['--no-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required', '--font-render-hinting=none', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
       })
       .then((b) => {
         b.on('disconnected', () => (browser = null));

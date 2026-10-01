@@ -25,7 +25,9 @@ export const config = {
   elevenLabsUrl: process.env.ELEVENLABS_BASE_URL ?? 'https://api.elevenlabs.io',
   /** Commands started by the agent or the terminal are killed after this many milliseconds by default. */
   commandTimeoutMs: 60_000,
-  maxAttachments: 20,
+  maxAttachments: 400,
+  /** Files per upload request. */
+  maxUploadFiles: 20,
 };
 
 for (const dir of [config.dataDir, config.projectsDir, config.rendersDir, config.cacheDir, config.framesDir]) {

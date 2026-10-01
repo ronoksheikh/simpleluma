@@ -5,6 +5,10 @@ export const users = sqliteTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   elevenLabsKeyEnc: text('elevenlabs_key_enc'),
+  /** The Director's own instructions, written by the user. `null` means the built-in default. */
+  directorPrompt: text('director_prompt'),
+  /** Director preferences as JSON (step limit, automatic checks…). */
+  preferences: text('preferences'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -59,9 +63,82 @@ export const messages = sqliteTable(
     failed: integer('failed', { mode: 'boolean' }).notNull().default(false),
     /** Extra data for the UI (frame image URL, render id, share link…) as JSON. */
     meta: text('meta'),
+    /** Assistant messages: the model's visible thinking, when the provider streams it. */
+    reasoning: text('reasoning'),
+    /** Assistant messages: token usage of the request as JSON ({ prompt, completion }). */
+    usage: text('usage'),
+    runId: text('run_id'),
+    /** Messages the model reads but the chat does not show (for example "continue"). */
+    hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('messages_project').on(t.projectId, t.id)],
+);
+
+/** One run of the Director: from a user message until it answers, stops, fails or reaches its step limit. */
+export const runs = sqliteTable(
+  'runs',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ['running', 'done', 'failed', 'stopped', 'paused', 'interrupted'] }).notNull(),
+    /** Why a run paused or failed, for the UI ("step_limit", an error message…). */
+    reason: text('reason'),
+    steps: integer('steps').notNull().default(0),
+    stepLimit: integer('step_limit').notNull(),
+    promptTokens: integer('prompt_tokens').notNull().default(0),
+    completionTokens: integer('completion_tokens').notNull().default(0),
+    model: text('model'),
+    /** Public address of the app when the run started (for share links when a run resumes after a restart). */
+    origin: text('origin'),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at'),
+  },
+  (t) => [index('runs_project').on(t.projectId, t.startedAt)],
+);
+
+/** The Director's plan for the current job, shown as a checklist. */
+export const todos = sqliteTable(
+  'todos',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    status: text('status', { enum: ['pending', 'in_progress', 'done'] }).notNull().default('pending'),
+    position: integer('position').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('todos_project').on(t.projectId, t.position)],
+);
+
+/** Facts the Director keeps: for one project, or for every project of the user (`projectId` null). */
+export const memories = sqliteTable(
+  'memories',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    source: text('source', { enum: ['user', 'director'] }).notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('memories_user').on(t.userId, t.projectId)],
+);
+
+/** Progress notes saved during long jobs, each tied to a git version. */
+export const checkpoints = sqliteTable(
+  'checkpoints',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    runId: text('run_id'),
+    summary: text('summary').notNull(),
+    sha: text('sha'),
+    step: integer('step').notNull().default(0),
+    auto: integer('auto', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('checkpoints_project').on(t.projectId, t.createdAt)],
 );
 
 export const renders = sqliteTable(

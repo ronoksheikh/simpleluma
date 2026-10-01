@@ -1,19 +1,19 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
 import { useProjectEvents } from '../../lib/realtime';
-import { ChevronIcon, TerminalIcon } from '../icons';
+import { TerminalIcon } from '../icons';
 
 export type DockTab = 'user' | 'agent';
 
 const THEME = {
-  background: '#071738',
-  foreground: '#eff5ff',
+  background: '#111318',
+  foreground: '#e8ecf3',
   cursor: '#5daeff',
   selectionBackground: 'rgb(93 174 255 / 0.35)',
-  black: '#071738', red: '#ff7b8b', green: '#7ee0b0', yellow: '#e6edf7', blue: '#5daeff', magenta: '#b4a7ff', cyan: '#7fd8f5', white: '#eff5ff',
+  black: '#111318', red: '#ff7b8b', green: '#7ee0b0', yellow: '#e6edf7', blue: '#5daeff', magenta: '#b4a7ff', cyan: '#7fd8f5', white: '#eff5ff',
   brightBlack: '#5b6b8f', brightRed: '#ff9aa6', brightGreen: '#9cf0c6', brightYellow: '#ffffff', brightBlue: '#8ec5ff', brightMagenta: '#cbc1ff', brightCyan: '#a4e7fb', brightWhite: '#ffffff',
 };
 
@@ -51,7 +51,7 @@ function AgentTerminal({ projectId, visible }: { projectId: string; visible: boo
     if (visible) requestAnimationFrame(() => handle.current?.fit());
   }, [visible]);
 
-  return <div ref={host} className="h-full" aria-label="Agent terminal (read only)" />;
+  return <div ref={host} className="h-full" aria-label="Director terminal (read only)" />;
 }
 
 /** An interactive shell in the project folder. It connects when first shown and keeps running between visits. */
@@ -97,44 +97,36 @@ function UserTerminal({ projectId, visible }: { projectId: string; visible: bool
   return <div ref={host} className="h-full" aria-label="Terminal" />;
 }
 
-interface Props {
-  projectId: string;
-  open: boolean;
-  tab: DockTab;
-  onOpen: (open: boolean) => void;
-  onTab: (tab: DockTab) => void;
-}
-
-export function TerminalDock({ projectId, open, tab, onOpen, onTab }: Props) {
+/** The terminal as a workspace tab: the Director's commands live, and your own shell in the project folder. */
+export function TerminalTab({ projectId, visible }: { projectId: string; visible: boolean }) {
+  const [tab, setTab] = useState<DockTab>('agent');
   const pill = (id: DockTab, label: string) => (
     <button
       type="button"
       role="tab"
       aria-selected={tab === id}
-      onClick={() => { onTab(id); onOpen(true); }}
-      className={`rounded-lg px-3 py-1 text-sm transition-colors ${tab === id && open ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white'}`}
+      onClick={() => setTab(id)}
+      className={`rounded-lg px-3 py-1 text-[12.5px] transition-colors ${tab === id ? 'bg-white/12 text-white' : 'text-white/55 hover:text-white'}`}
     >
       {label}
     </button>
   );
-
   return (
-    <section className="overflow-hidden rounded-3xl bg-night text-white" aria-label="Terminal dock">
-      <div className="flex h-11 items-center gap-2 px-4">
-        <TerminalIcon size={16} className="text-white/60" />
-        <div role="tablist" aria-label="Terminal" className="flex gap-1">
-          {pill('user', 'Terminal')}
-          {pill('agent', 'Agent')}
+    <div className="flex h-full min-h-0 flex-col p-3">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[#111318] text-white" aria-label="Terminal">
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b border-white/[0.06] px-3">
+          <TerminalIcon size={15} className="text-white/50" />
+          <div role="tablist" aria-label="Terminal" className="flex gap-1">
+            {pill('agent', 'Director')}
+            {pill('user', 'Your shell')}
+          </div>
+          <span className="ml-auto hidden text-[11.5px] text-white/35 sm:inline">{tab === 'agent' ? "Live, read-only view of the Director's commands" : 'bash in the project folder · secrets are env vars'}</span>
         </div>
-        <span className="ml-2 hidden text-xs text-white/40 sm:inline">{tab === 'agent' ? "Live view of the agent's commands" : 'Working inside the project folder'}</span>
-        <button type="button" onClick={() => onOpen(!open)} aria-label={open ? 'Collapse terminal' : 'Expand terminal'} aria-expanded={open} className="ml-auto grid size-7 place-items-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white">
-          <ChevronIcon size={16} className={open ? 'rotate-90' : '-rotate-90'} />
-        </button>
-      </div>
-      <div className={open ? 'h-56' : 'hidden'}>
-        <div className={tab === 'user' ? 'h-full' : 'hidden'}><UserTerminal projectId={projectId} visible={open && tab === 'user'} /></div>
-        <div className={tab === 'agent' ? 'h-full' : 'hidden'}><AgentTerminal projectId={projectId} visible={open && tab === 'agent'} /></div>
-      </div>
-    </section>
+        <div className="min-h-0 flex-1">
+          <div className={tab === 'agent' ? 'h-full' : 'hidden'}><AgentTerminal projectId={projectId} visible={visible && tab === 'agent'} /></div>
+          <div className={tab === 'user' ? 'h-full' : 'hidden'}><UserTerminal projectId={projectId} visible={visible && tab === 'user'} /></div>
+        </div>
+      </section>
+    </div>
   );
 }

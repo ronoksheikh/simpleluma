@@ -25,7 +25,12 @@ export function sourceFor(projectId: string, ref: TreeRef): ProjectSource {
  * frame without cookies: access is by the signed token in the URL, and the answers allow any origin.
  */
 export async function serveTree(reply: FastifyReply, source: ProjectSource, path: string): Promise<FastifyReply> {
-  reply.header('access-control-allow-origin', '*').header('cache-control', 'no-store').header('x-content-type-options', 'nosniff');
+  // Uploaded HTML and SVG run as documents when opened directly: keep them in an opaque origin, away from the app's cookies.
+  reply
+    .header('access-control-allow-origin', '*')
+    .header('cache-control', 'no-store')
+    .header('x-content-type-options', 'nosniff')
+    .header('content-security-policy', 'sandbox allow-scripts allow-pointer-lock');
   if (path === '__manifest') return reply.send(await buildManifest(source));
   return reply.type(contentType(path)).send(await source.read(path));
 }

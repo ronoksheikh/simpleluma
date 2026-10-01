@@ -2,7 +2,7 @@ import { Button, FieldError, Input, Label, TextField } from '@heroui/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Logo } from '../components/Logo';
+import { LogoMark } from '../components/Logo';
 import { api, ApiError } from '../lib/api';
 import { useMe, type Me } from '../lib/auth';
 
@@ -35,46 +35,35 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   };
 
   return (
-    <div className="grid min-h-full lg:grid-cols-[1.1fr_1fr]">
-      <aside className="brand-gradient relative hidden flex-col justify-between p-12 text-white lg:flex">
-        <Logo light />
-        <div className="max-w-md">
-          <h1 className="wordmark text-5xl leading-[1.08]">Describe a video.<br />Watch it move.</h1>
-          <p className="mt-5 text-lg text-white/80">
-            Chat with an AI motion designer that builds your video in code, previews it live and renders the MP4.
-          </p>
+    <div className="relative flex min-h-full flex-col items-center justify-center overflow-hidden bg-canvas px-6 py-12">
+      <div className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(93_174_255/0.28),transparent)]" />
+      <div className="relative w-full max-w-[380px]">
+        <div className="flex flex-col items-center text-center">
+          <LogoMark size={56} className="rounded-[18px] shadow-[0_18px_40px_-16px_rgb(41_112_236/0.7)]" />
+          <p className="wordmark mt-5 text-[15px] text-ink/50">Luma Studio</p>
+          <h1 className="wordmark mt-1 text-[28px]">{signup ? 'Create your studio' : 'Welcome back'}</h1>
+          <p className="mt-1.5 text-[14px] text-ink/55">{signup ? 'Brief the Director. Get motion graphics, built in code.' : 'Sign in to keep directing.'}</p>
         </div>
-        <p className="text-sm text-white/60">Every video is its own git project.</p>
-      </aside>
-      <section className="flex items-center justify-center p-6">
-        <form onSubmit={submit} className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-[0_10px_40px_-12px_rgb(7_23_56/0.15)]">
-          <div className="mb-8 lg:hidden"><Logo /></div>
-          <h2 className="text-2xl font-semibold tracking-tight">{signup ? 'Create your account' : 'Welcome back'}</h2>
-          <p className="mt-1 text-sm text-night/60">{signup ? 'Start making videos in a minute.' : 'Log in to your studio.'}</p>
-          <div className="mt-6 flex flex-col gap-4">
-            <TextField isRequired fullWidth name="email" type="email" value={email} onChange={setEmail}>
-              <Label>Email</Label>
-              <Input placeholder="you@example.com" autoComplete="email" />
-              <FieldError />
-            </TextField>
-            <TextField isRequired fullWidth name="password" type="password" value={password} onChange={setPassword}>
-              <Label>Password</Label>
-              <Input placeholder={signup ? 'At least 8 characters' : 'Your password'} autoComplete={signup ? 'new-password' : 'current-password'} />
-              <FieldError />
-            </TextField>
-          </div>
-          {error && <p role="alert" className="mt-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-          <Button type="submit" fullWidth size="lg" className="mt-6" isPending={busy}>
-            {signup ? 'Sign up' : 'Log in'}
-          </Button>
-          <p className="mt-5 text-center text-sm text-night/60">
-            {signup ? 'Already have an account? ' : 'New here? '}
-            <Link to={signup ? '/login' : '/signup'} className="font-medium text-lumablue hover:text-royal">
-              {signup ? 'Log in' : 'Create an account'}
-            </Link>
-          </p>
+        <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
+          <TextField isRequired fullWidth name="email" type="email" value={email} onChange={setEmail}>
+            <Label>Email</Label>
+            <Input placeholder="you@example.com" autoComplete="email" />
+            <FieldError />
+          </TextField>
+          <TextField isRequired fullWidth name="password" type="password" value={password} onChange={setPassword}>
+            <Label>Password</Label>
+            <Input placeholder={signup ? 'At least 8 characters' : 'Your password'} autoComplete={signup ? 'new-password' : 'current-password'} />
+            <FieldError />
+          </TextField>
+          {error && <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
+          <Button type="submit" fullWidth size="lg" className="mt-1" isPending={busy}>{signup ? 'Create account' : 'Sign in'}</Button>
         </form>
-      </section>
+        <p className="mt-6 text-center text-[13.5px] text-ink/55">
+          {signup ? 'Already have an account? ' : 'New to Luma Studio? '}
+          <Link to={signup ? '/login' : '/signup'} className="font-medium text-lumablue hover:text-royal">{signup ? 'Sign in' : 'Create an account'}</Link>
+        </p>
+      </div>
+      <p className="relative mt-16 text-[12px] text-ink/35">Self-hosted · every video is its own git project</p>
     </div>
   );
 }

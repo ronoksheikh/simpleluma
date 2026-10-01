@@ -25,8 +25,8 @@ export function App() {
         <Route index element={<DashboardPage />} />
         <Route path="setup" element={<SetupModelPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="p/:id" element={<StudioPage />} />
       </Route>
-      <Route path="/p/:id" element={<Protected><StudioPage /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

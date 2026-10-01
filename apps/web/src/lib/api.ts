@@ -5,11 +5,16 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: body instanceof FormData || body === undefined ? undefined : { 'content-type': 'application/json' },
-    body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      headers: body instanceof FormData || body === undefined ? undefined : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError('Cannot reach Luma Studio. Check your connection; the Director keeps working on the server.', 0);
+  }
   const data = (await res.json().catch(() => null)) as { error?: string } | null;
   if (!res.ok) throw new ApiError(data?.error ?? `Request failed (${res.status})`, res.status);
   return data as T;

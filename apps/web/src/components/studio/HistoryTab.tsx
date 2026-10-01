@@ -36,20 +36,20 @@ export function HistoryTab({ projectId, onShare }: { projectId: string; onShare:
     <>
       <ol className="flex flex-col gap-2">
         {commits.map((c, i) => (
-          <li key={c.sha} className="rounded-2xl bg-white shadow-[0_2px_12px_-4px_rgb(7_23_56/0.08)]">
+          <li key={c.sha} className="rounded-2xl bg-white shadow-[0_2px_12px_-4px_rgb(22_24_29/0.08)]">
             <button type="button" onClick={() => setOpen(open === c.sha ? null : c.sha)} className="flex w-full items-center gap-3 px-4 py-3 text-left" aria-expanded={open === c.sha}>
-              <ChevronIcon size={16} className={`shrink-0 text-night/40 transition-transform ${open === c.sha ? 'rotate-90' : ''}`} />
+              <ChevronIcon size={16} className={`shrink-0 text-ink/40 transition-transform ${open === c.sha ? 'rotate-90' : ''}`} />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{c.message}</div>
-                <div className="text-sm text-night/55">
+                <div className="text-sm text-ink/55">
                   {timeAgo(c.date)} · {c.files} {c.files === 1 ? 'file' : 'files'} · <span className="text-emerald-700">+{c.insertions}</span> <span className="text-rose-700">−{c.deletions}</span>
                 </div>
               </div>
               {i === 0 && <Chip size="sm" color="accent" variant="soft"><Chip.Label>Current</Chip.Label></Chip>}
-              <code className="font-mono text-xs text-night/50">{c.sha.slice(0, 7)}</code>
+              <code className="font-mono text-xs text-ink/50">{c.sha.slice(0, 7)}</code>
             </button>
             {open === c.sha && (
-              <div className="flex flex-col gap-3 border-t border-night/10 px-4 py-3">
+              <div className="flex flex-col gap-3 border-t border-ink/10 px-4 py-3">
                 <div className="flex gap-2">
                   {i > 0 && <Button size="sm" variant="secondary" onPress={() => setRestoring(c)}><RestoreIcon size={15} />Restore this version</Button>}
                   <Button size="sm" variant="ghost" onPress={() => onShare(c.sha, c.message)}><ShareIcon size={15} />Share</Button>

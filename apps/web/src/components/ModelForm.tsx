@@ -79,7 +79,7 @@ export function ModelForm({ onSaved }: { onSaved: () => void }) {
     <div className="flex flex-col gap-5">
       <div>
         <span className="block text-sm font-medium">Provider</span>
-        <div role="radiogroup" aria-label="Provider" className="mt-2 inline-flex rounded-xl bg-night/5 p-1">
+        <div role="radiogroup" aria-label="Provider" className="mt-2 inline-flex rounded-xl bg-stage/5 p-1">
           {PRESETS.map((p) => (
             <button
               key={p.id}
@@ -87,7 +87,7 @@ export function ModelForm({ onSaved }: { onSaved: () => void }) {
               role="radio"
               aria-checked={preset === p.id}
               onClick={() => choose(p.id)}
-              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${preset === p.id ? 'bg-white text-night shadow-sm' : 'text-night/60 hover:text-night'}`}
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${preset === p.id ? 'bg-white text-ink shadow-sm' : 'text-ink/60 hover:text-ink'}`}
             >
               {p.label}
             </button>
@@ -122,12 +122,12 @@ export function ModelForm({ onSaved }: { onSaved: () => void }) {
           <ComboBox.Trigger />
         </ComboBox.InputGroup>
         <ComboBox.Popover>
-          <ListBox renderEmptyState={() => <div className="px-3 py-2 text-sm text-night/60">No matching models</div>}>
+          <ListBox renderEmptyState={() => <div className="px-3 py-2 text-sm text-ink/60">No matching models</div>}>
             {(m: ModelInfo) => (
               <ListBox.Item id={m.id} textValue={m.id}>
                 <div className="flex flex-col">
                   <span className="text-sm">{m.name}</span>
-                  {m.name !== m.id && <span className="text-xs text-night/50">{m.id}</span>}
+                  {m.name !== m.id && <span className="text-xs text-ink/50">{m.id}</span>}
                 </div>
                 <ListBox.ItemIndicator />
               </ListBox.Item>
@@ -136,10 +136,10 @@ export function ModelForm({ onSaved }: { onSaved: () => void }) {
         </ComboBox.Popover>
       </ComboBox>
 
-      {loading && <p className="flex items-center gap-2 text-sm text-night/60"><Spinner size="sm" /> Loading your models…</p>}
-      {!loading && models.length > 0 && <p className="text-sm text-night/60">{models.length} models available.</p>}
+      {loading && <p className="flex items-center gap-2 text-sm text-ink/60"><Spinner size="sm" /> Loading your models…</p>}
+      {!loading && models.length > 0 && <p className="text-sm text-ink/60">{models.length} models available.</p>}
       {listError && <p role="alert" className="text-sm text-danger">{listError}</p>}
-      {selected?.tools === false && <p className="text-sm text-night/70">This model is listed without tool support, so it is likely to fail the test.</p>}
+      {selected?.tools === false && <p className="text-sm text-ink/70">This model is listed without tool support, so it is likely to fail the test.</p>}
 
       {saveError && (
         <Alert status="danger">

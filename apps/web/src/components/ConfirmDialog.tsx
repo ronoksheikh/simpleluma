@@ -18,7 +18,7 @@ export function ConfirmDialog({ isOpen, title, message, confirmLabel, onConfirm,
             <Modal.Heading>{title}</Modal.Heading>
           </Modal.Header>
           <Modal.Body>
-            <p className="text-night/70">{message}</p>
+            <p className="text-ink/70">{message}</p>
           </Modal.Body>
           <Modal.Footer>
             <Button variant="ghost" onPress={onClose}>Cancel</Button>

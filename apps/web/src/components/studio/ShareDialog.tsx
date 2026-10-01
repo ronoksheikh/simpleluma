@@ -72,7 +72,7 @@ export function ShareDialog({ projectId, share, onClose }: { projectId: string; 
             <Modal.Heading>Share “{share?.title}”</Modal.Heading>
           </Modal.Header>
           <Modal.Body className="flex flex-col gap-5 p-1">
-            <p className="text-sm text-night/65">Anyone with the link can watch in a full-screen player, without logging in. You can turn a link off at any time.</p>
+            <p className="text-sm text-ink/65">Anyone with the link can watch in a full-screen player, without logging in. You can turn a link off at any time.</p>
             <div className="flex items-end gap-3">
               <Select className="flex-1" selectedKey={expiry} onSelectionChange={(k) => setExpiry(String(k))} aria-label="Link expiry">
                 <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
@@ -90,7 +90,7 @@ export function ShareDialog({ projectId, share, onClose }: { projectId: string; 
                   const st = status(s);
                   const live = st.label === 'Active';
                   return (
-                    <li key={s.id} className="rounded-2xl border border-night/10 p-3">
+                    <li key={s.id} className="rounded-2xl border border-ink/10 p-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-medium">{s.label}</span>
                         <Chip size="sm" color={st.color} variant="soft"><Chip.Label>{st.label}</Chip.Label></Chip>
@@ -100,7 +100,7 @@ export function ShareDialog({ projectId, share, onClose }: { projectId: string; 
                         <Button size="sm" isIconOnly variant="secondary" aria-label="Copy link" isDisabled={!live} onPress={() => void copy(s.token)}><CopyIcon size={15} /></Button>
                         <Button size="sm" variant="ghost" isDisabled={!live} onPress={() => revoke.mutate(s.id)}>Turn off</Button>
                       </div>
-                      <p className="mt-1.5 text-xs text-night/50">Created {timeOfDay(s.createdAt)}{s.expiresAt ? ` · expires ${timeOfDay(s.expiresAt)}` : ''}</p>
+                      <p className="mt-1.5 text-xs text-ink/50">Created {timeOfDay(s.createdAt)}{s.expiresAt ? ` · expires ${timeOfDay(s.expiresAt)}` : ''}</p>
                     </li>
                   );
                 })}

@@ -32,7 +32,7 @@ export function SharePage() {
     };
   }, []);
 
-  if (isLoading) return <div className="grid h-full place-items-center bg-night"><Spinner color="current" className="text-white" /></div>;
+  if (isLoading) return <div className="grid h-full place-items-center bg-stage"><Spinner color="current" className="text-white" /></div>;
   if (error || !data) {
     return (
       <div className="brand-gradient grid h-full place-items-center px-6 text-center text-white">
@@ -46,13 +46,13 @@ export function SharePage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-night">
+    <div className="fixed inset-0 bg-stage">
       {data.kind === 'version' ? (
         <iframe title={data.title} src={`/player?base=${encodeURIComponent(`/api/share/${token}/tree`)}`} sandbox="allow-scripts" allow="fullscreen; autoplay" allowFullScreen className="h-full w-full border-0" />
       ) : (
         <video src={`/api/share/${token}/video`} controls playsInline className="h-full w-full object-contain" aria-label={data.title} />
       )}
-      <div className={`pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-full bg-night/60 py-1.5 pl-2 pr-4 text-sm text-white backdrop-blur transition-opacity duration-500 ${showTitle ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-full bg-stage/60 py-1.5 pl-2 pr-4 text-sm text-white backdrop-blur transition-opacity duration-500 ${showTitle ? 'opacity-100' : 'opacity-0'}`}>
         <LogoMark size={22} />
         <span>{data.title}</span>
       </div>

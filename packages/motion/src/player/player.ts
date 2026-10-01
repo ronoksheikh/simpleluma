@@ -21,7 +21,7 @@ function sizeCanvas(width: number): number {
 }
 
 function notifyParent(errors: SceneError[]): void {
-  parent.postMessage({ luma: 'status', errors, duration: engine.video.duration }, '*');
+  parent.postMessage({ luma: 'status', errors, duration: engine.video?.duration ?? 0, timeline: engine.video ? engine.timeline() : [] }, '*');
 }
 
 async function loadProject(): Promise<void> {
@@ -129,6 +129,7 @@ class Player {
   private master: GainNode | null = null;
   private raf = 0;
   private shownErrors = 0;
+  private lastPost = 0;
   private readonly el = {
     play: document.querySelector<HTMLButtonElement>('#play')!,
     scrub: document.querySelector<HTMLInputElement>('#scrub')!,
@@ -167,6 +168,15 @@ class Player {
       if (e.code === 'ArrowRight') this.seek(this.time + 1);
     };
     new ResizeObserver(() => this.fit()).observe(document.querySelector('#frame')!);
+    // The studio around the frame can drive the player (scene chips, keyboard shortcuts).
+    window.addEventListener('message', (e) => {
+      if (e.source !== parent) return;
+      const msg = e.data as { luma?: string; t?: number };
+      if (msg?.luma === 'seek' && typeof msg.t === 'number') this.seek(msg.t);
+      if (msg?.luma === 'play') void this.play();
+      if (msg?.luma === 'pause') this.pause();
+      if (msg?.luma === 'toggle') toggle();
+    });
   }
 
   async start(): Promise<void> {
@@ -221,6 +231,10 @@ class Player {
       if (!this.playing || !this.ac) return;
       this.time = Math.min(engine.video.duration, this.ac.currentTime - this.origin);
       this.draw();
+      if (performance.now() - this.lastPost > 100) {
+        this.lastPost = performance.now();
+        parent.postMessage({ luma: 'time', t: this.time, playing: true }, '*');
+      }
       if (this.time >= engine.video.duration) return this.pause();
       this.raf = requestAnimationFrame(tick);
     };
@@ -234,7 +248,7 @@ class Player {
     cancelAnimationFrame(this.raf);
     this.stopAudio();
     this.draw();
-    parent.postMessage({ luma: 'time', t: this.time }, '*');
+    parent.postMessage({ luma: 'time', t: this.time, playing: false }, '*');
   }
 
   private async startAudio(): Promise<void> {
@@ -268,7 +282,13 @@ if (renderMode) {
   installRenderApi(ready);
 } else {
   void ready.then(async () => {
-    if (!engine.video) return;
+    if (!engine.video) {
+      const box = document.querySelector<HTMLElement>('#errors')!;
+      box.hidden = false;
+      box.textContent = engine.errors.map((e) => `${e.path}: ${e.message}`).join('\n');
+      notifyParent(engine.errors);
+      return;
+    }
     await new Player().start();
     document.body.dataset.ready = 'true';
   });

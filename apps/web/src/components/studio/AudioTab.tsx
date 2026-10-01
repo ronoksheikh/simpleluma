@@ -17,30 +17,30 @@ export function AudioTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-3xl bg-white p-5 shadow-[0_2px_12px_-4px_rgb(7_23_56/0.08)]">
+      <section className="rounded-3xl bg-white p-5 shadow-[0_2px_12px_-4px_rgb(22_24_29/0.08)]">
         <h3 className="font-medium">Music and effects</h3>
-        <p className="mt-1 text-sm text-night/60">{hasScore ? 'This video has a Web Audio score (audio.js). It plays in the preview and is mixed into renders.' : 'No score yet. Ask Luma for music or sound effects.'}</p>
+        <p className="mt-1 text-sm text-ink/60">{hasScore ? 'This video has a Web Audio score (audio.js). It plays in the preview and is mixed into renders.' : 'No score yet. Ask the Director for music or sound effects.'}</p>
       </section>
       <section>
         <h3 className="mb-2 px-1 font-medium">Voice-over</h3>
         {clipPaths.length === 0 ? (
-          <div className="rounded-3xl bg-white p-5 text-sm text-night/60 shadow-[0_2px_12px_-4px_rgb(7_23_56/0.08)]">
+          <div className="rounded-3xl bg-white p-5 text-sm text-ink/60 shadow-[0_2px_12px_-4px_rgb(22_24_29/0.08)]">
             {settings?.elevenLabs.configured ? (
-              'No voice lines yet. Ask Luma to add a voice-over: each line is generated with word timings so captions and animations follow the speech.'
+              'No voice lines yet. Ask the Director to add a voice-over: each line is generated with word timings so captions and animations follow the speech.'
             ) : (
-              <>Add an ElevenLabs key in <Link to="/settings" className="font-medium text-lumablue hover:text-royal">Settings</Link> and Luma can narrate your video.</>
+              <>Add an ElevenLabs key in <Link to="/settings" className="font-medium text-lumablue hover:text-royal">Settings</Link> and the Director can narrate your video.</>
             )}
           </div>
         ) : (
           <ul className="flex flex-col gap-3">
             {clips.map((q, i) =>
               q.data ? (
-                <li key={clipPaths[i]} className="rounded-3xl bg-white p-5 shadow-[0_2px_12px_-4px_rgb(7_23_56/0.08)]">
+                <li key={clipPaths[i]} className="rounded-3xl bg-white p-5 shadow-[0_2px_12px_-4px_rgb(22_24_29/0.08)]">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="font-medium">{clipPaths[i]!.replace('audio/voice/', '').replace('.json', '')}</span>
-                    <span className="text-sm text-night/55">at {q.data.at.toFixed(1)}s · {q.data.duration.toFixed(1)}s · {q.data.words.length} words</span>
+                    <span className="text-sm text-ink/55">at {q.data.at.toFixed(1)}s · {q.data.duration.toFixed(1)}s · {q.data.words.length} words</span>
                   </div>
-                  <p className="mt-2 text-sm text-night/75">{q.data.text}</p>
+                  <p className="mt-2 text-sm text-ink/75">{q.data.text}</p>
                   <audio controls preload="none" src={`/api/projects/${projectId}/files/audio/voice/${q.data.file}`} className="mt-3 w-full" />
                 </li>
               ) : null,

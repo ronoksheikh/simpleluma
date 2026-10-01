@@ -10,6 +10,8 @@ import { config } from './config.js';
 import { requireUser } from './lib/auth.js';
 import { HttpError } from './lib/errors.js';
 import { authRoutes } from './routes/auth.js';
+import { brandRoutes } from './routes/brand.js';
+import { directorRoutes } from './routes/director.js';
 import { chatRoutes } from './routes/chat.js';
 import { modelRoutes } from './routes/models.js';
 import { projectRoutes } from './routes/projects.js';
@@ -33,7 +35,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(cookie);
   await app.register(websocket);
-  await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: config.maxAttachments } });
+  await app.register(multipart, { limits: { fileSize: 100 * 1024 * 1024, files: config.maxUploadFiles } });
 
   // The player and framework files are public: they contain no user data.
   await app.register(fastifyStatic, {
@@ -59,6 +61,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     await api.register(projectRoutes);
     await api.register(renderRoutes);
     await api.register(chatRoutes);
+    await api.register(directorRoutes);
+    await api.register(brandRoutes);
     await api.register(shareRoutes);
     await api.register(terminalRoutes);
   });

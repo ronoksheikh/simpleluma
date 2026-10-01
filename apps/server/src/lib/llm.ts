@@ -116,26 +116,81 @@ export async function testModel(endpoint: Endpoint, model: string): Promise<void
 }
 
 const STALL_MS = 120_000;
+const RETRIES = 3;
+
+export interface Usage {
+  prompt: number;
+  completion: number;
+  /** `true` when the provider did not report usage and the numbers are estimates. */
+  estimated?: boolean;
+}
 
 export interface AssistantTurn {
   content: string;
+  reasoning: string;
   toolCalls: ToolCall[];
+  usage: Usage | null;
+  /** Why the model stopped ("stop", "tool_calls", "length"…), when the provider says. */
+  finish: string | null;
+}
+
+export interface StreamHandlers {
+  onText(delta: string): void;
+  onReasoning(delta: string): void;
+  /** Called before a retry after a transient provider error. */
+  onRetry?(attempt: number, reason: string): void;
 }
 
 interface StreamChunk {
   choices?: Array<{
-    delta?: { content?: string | null; tool_calls?: Array<{ index?: number; id?: string; function?: { name?: string; arguments?: string } }> };
+    delta?: {
+      content?: string | null;
+      reasoning?: string | null;
+      reasoning_content?: string | null;
+      tool_calls?: Array<{ index?: number; id?: string; function?: { name?: string; arguments?: string } }>;
+    };
+    finish_reason?: string | null;
   }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
   error?: { message?: string };
 }
 
-/** One streamed chat completion. `onText` receives text as it arrives; tool calls are returned whole. */
+/** Errors worth trying again: rate limits, overloaded or restarting providers, dropped connections. */
+const transient = (message: string): boolean => /\b(429|500|502|503|504|529)\b|overloaded|rate.?limit|ECONNRESET|socket hang up|terminated|fetch failed|other side closed|stopped responding/i.test(message);
+
+/** One streamed chat completion, retried on transient errors. Text and thinking stream out; tool calls are returned whole. */
 export async function streamChat(
   endpoint: Endpoint,
   body: { model: string; messages: ChatMessage[]; tools: ToolSpec[] },
   signal: AbortSignal,
-  onText: (delta: string) => void,
+  handlers: StreamHandlers,
 ): Promise<AssistantTurn> {
+  let usageOption = true;
+  for (let attempt = 1; ; attempt++) {
+    let streamed = false;
+    try {
+      return await streamOnce(endpoint, { ...body, ...(usageOption ? { stream_options: { include_usage: true } } : {}) }, signal, {
+        onText: (d) => { streamed = true; handlers.onText(d); },
+        onReasoning: (d) => { streamed = true; handlers.onReasoning(d); },
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (signal.aborted) throw e;
+      // A few servers reject `stream_options`: ask again without it.
+      if (usageOption && /stream_options|include_usage/i.test(message)) {
+        usageOption = false;
+        attempt--;
+        continue;
+      }
+      // Once text has reached the user, a retry would repeat it; let the run decide.
+      if (streamed || attempt >= RETRIES || !transient(message)) throw e;
+      handlers.onRetry?.(attempt, message);
+      await new Promise((r) => setTimeout(r, 1500 * 2 ** (attempt - 1)));
+    }
+  }
+}
+
+async function streamOnce(endpoint: Endpoint, body: Record<string, unknown>, signal: AbortSignal, handlers: StreamHandlers): Promise<AssistantTurn> {
   // A provider that goes quiet would leave the run hanging: give up when nothing arrives for a while.
   const stall = new AbortController();
   let stalled = false;
@@ -155,7 +210,7 @@ export async function streamChat(
       signal: AbortSignal.any([signal, stall.signal]),
       body: JSON.stringify({ ...body, stream: true, tool_choice: 'auto' }),
     });
-    return await readStream(res, arm, onText);
+    return await readStream(res, arm, handlers);
   } catch (e) {
     if (stalled) throw badRequest('The model stopped responding. Try again, or pick another model in Settings.');
     throw e;
@@ -164,13 +219,73 @@ export async function streamChat(
   }
 }
 
-async function readStream(res: Response, onChunk: () => void, onText: (delta: string) => void): Promise<AssistantTurn> {
+/**
+ * Splits `<think>…</think>` blocks (used by some open models) out of the visible text, across chunk boundaries.
+ */
+export class ThinkSplitter {
+  private inside = false;
+  private pending = '';
+
+  push(text: string): { text: string; reasoning: string } {
+    let input = this.pending + text;
+    this.pending = '';
+    let out = '';
+    let thought = '';
+    while (input) {
+      const tag = this.inside ? '</think>' : '<think>';
+      const at = input.indexOf(tag);
+      if (at === -1) {
+        // Hold back a possible partial tag at the end.
+        let keep = 0;
+        for (let n = Math.min(tag.length - 1, input.length); n > 0; n--) {
+          if (tag.startsWith(input.slice(-n))) {
+            keep = n;
+            break;
+          }
+        }
+        const body = input.slice(0, input.length - keep);
+        this.pending = input.slice(input.length - keep);
+        if (this.inside) thought += body;
+        else out += body;
+        break;
+      }
+      if (this.inside) thought += input.slice(0, at);
+      else out += input.slice(0, at);
+      input = input.slice(at + tag.length);
+      this.inside = !this.inside;
+    }
+    return { text: out, reasoning: thought };
+  }
+
+  flush(): { text: string; reasoning: string } {
+    const rest = this.pending;
+    this.pending = '';
+    return this.inside ? { text: '', reasoning: rest } : { text: rest, reasoning: '' };
+  }
+}
+
+async function readStream(res: Response, onChunk: () => void, handlers: StreamHandlers): Promise<AssistantTurn> {
   if (!res.body) throw badRequest('The provider sent an empty response.');
 
   let content = '';
+  let reasoning = '';
+  let usage: Usage | null = null;
+  let finish: string | null = null;
   const calls: ToolCall[] = [];
   const decoder = new TextDecoder();
+  const think = new ThinkSplitter();
   let buffer = '';
+
+  const emit = (part: { text: string; reasoning: string }): void => {
+    if (part.text) {
+      content += part.text;
+      handlers.onText(part.text);
+    }
+    if (part.reasoning) {
+      reasoning += part.reasoning;
+      handlers.onReasoning(part.reasoning);
+    }
+  };
 
   const handle = (line: string): void => {
     if (!line.startsWith('data:')) return;
@@ -178,11 +293,15 @@ async function readStream(res: Response, onChunk: () => void, onText: (delta: st
     if (!data || data === '[DONE]') return;
     const chunk = JSON.parse(data) as StreamChunk;
     if (chunk.error) throw badRequest(chunk.error.message ?? 'The model returned an error.');
-    const delta = chunk.choices?.[0]?.delta;
-    if (delta?.content) {
-      content += delta.content;
-      onText(delta.content);
+    if (chunk.usage && (chunk.usage.prompt_tokens || chunk.usage.completion_tokens)) {
+      usage = { prompt: chunk.usage.prompt_tokens ?? 0, completion: chunk.usage.completion_tokens ?? 0 };
     }
+    const choice = chunk.choices?.[0];
+    if (choice?.finish_reason) finish = choice.finish_reason;
+    const delta = choice?.delta;
+    const thought = delta?.reasoning ?? delta?.reasoning_content;
+    if (thought) emit({ text: '', reasoning: thought });
+    if (delta?.content) emit(think.push(delta.content));
     for (const part of delta?.tool_calls ?? []) {
       // Some providers leave out `index`: a new id starts a new call, anything else continues the last one.
       const index = part.index ?? (part.id ? calls.length : Math.max(0, calls.length - 1));
@@ -201,7 +320,19 @@ async function readStream(res: Response, onChunk: () => void, onText: (delta: st
     lines.forEach((l) => handle(l.trim()));
   }
   handle(buffer.trim());
+  emit(think.flush());
 
   const toolCalls = calls.filter(Boolean).map((c, i) => ({ ...c, id: c.id || `call_${Date.now()}_${i}` }));
-  return { content, toolCalls };
+  return { content: content.trim() ? content : '', reasoning, toolCalls, usage, finish };
+}
+
+/** Rough token count for providers that do not report usage (about four characters per token). */
+export function estimateTokens(messages: ChatMessage[]): number {
+  let chars = 0;
+  for (const m of messages) {
+    if (typeof m.content === 'string') chars += m.content.length;
+    else if (Array.isArray(m.content)) chars += m.content.reduce((n, p) => n + (p.type === 'text' ? p.text.length : 3000), 0);
+    if (m.role === 'assistant' && m.tool_calls) chars += JSON.stringify(m.tool_calls).length;
+  }
+  return Math.ceil(chars / 4);
 }

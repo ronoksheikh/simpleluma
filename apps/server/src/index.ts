@@ -7,6 +7,7 @@ import './lib/crypto.js';
 import { protectData } from './lib/permissions.js';
 import { closeBrowser } from './render/browser.js';
 import { recoverInterruptedRenders } from './render/service.js';
+import { recoverInterruptedRuns } from './agent/loop.js';
 
 // Files created by the server must stay writable by the sandbox user's group.
 process.umask(0o002);
@@ -17,6 +18,7 @@ protectData();
 
 const app = await buildApp();
 await app.listen({ port: config.port, host: config.host });
+recoverInterruptedRuns();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {

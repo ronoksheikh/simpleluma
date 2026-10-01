@@ -18,14 +18,14 @@ function RenderCard({ render, projectId, onShare }: { render: RenderView; projec
   const percent = Math.round(render.progress * 100);
 
   return (
-    <li className="overflow-hidden rounded-3xl bg-white shadow-[0_2px_12px_-4px_rgb(7_23_56/0.1)]">
+    <li className="overflow-hidden rounded-3xl bg-white shadow-[0_2px_12px_-4px_rgb(22_24_29/0.1)]">
       {render.status === 'done' && render.kind === 'final' && (
         <div className="brand-gradient px-5 py-2 text-sm font-medium text-white">Render complete</div>
       )}
       <div className="flex items-center gap-3 px-5 pt-4">
         <div className="min-w-0 flex-1">
           <div className="font-medium">{label}</div>
-          <div className="text-sm text-night/55">
+          <div className="text-sm text-ink/55">
             {timeAgo(render.createdAt)} · version <span className="font-mono">{render.commit.slice(0, 7)}</span>
             {render.status === 'done' && render.sizeBytes ? ` · ${megabytes(render.sizeBytes)}` : ''}
           </div>
@@ -39,11 +39,11 @@ function RenderCard({ render, projectId, onShare }: { render: RenderView; projec
           <ProgressBar value={percent} aria-label={`${label} progress`}>
             <ProgressBar.Track><ProgressBar.Fill /></ProgressBar.Track>
           </ProgressBar>
-          <div className="mt-2 flex justify-between text-sm text-night/60">
+          <div className="mt-2 flex justify-between text-sm text-ink/60">
             <span>{render.framesDone.toLocaleString()} of {render.framesTotal.toLocaleString()} frames · {percent}%</span>
             <span>{render.etaSeconds !== null ? `${render.etaSeconds}s left` : 'Starting…'}</span>
           </div>
-          {render.chunksCached > 0 && <p className="mt-1 text-xs text-night/50">{render.chunksCached} of {render.chunksTotal} scenes reused from cache</p>}
+          {render.chunksCached > 0 && <p className="mt-1 text-xs text-ink/50">{render.chunksCached} of {render.chunksTotal} scenes reused from cache</p>}
         </div>
       )}
 
@@ -51,9 +51,9 @@ function RenderCard({ render, projectId, onShare }: { render: RenderView; projec
 
       {render.status === 'done' && (
         <div className="px-5 pt-3">
-          <video src={url} controls preload="metadata" className="aspect-video w-full rounded-2xl bg-night" />
+          <video src={url} controls preload="metadata" className="aspect-video w-full rounded-2xl bg-stage" />
           {render.chunksTotal > 0 && (
-            <p className="mt-2 text-xs text-night/50">
+            <p className="mt-2 text-xs text-ink/50">
               {render.chunksTotal - render.chunksCached} of {render.chunksTotal} scenes rendered, {render.chunksCached} reused from cache
             </p>
           )}
@@ -81,9 +81,9 @@ export function RendersTab({ projectId, onShare }: { projectId: string; onShare:
   const { data: renders = [], isLoading } = useQuery({ queryKey: ['renders', projectId], queryFn: () => api.get<RenderView[]>(`/api/projects/${projectId}/renders`) });
   if (!isLoading && renders.length === 0) {
     return (
-      <div className="grid h-full place-items-center px-6 text-center text-night/60">
+      <div className="grid h-full place-items-center px-6 text-center text-ink/60">
         <div>
-          <p className="font-medium text-night">No renders yet</p>
+          <p className="font-medium text-ink">No renders yet</p>
           <p className="mt-1 text-sm">Use “Quick preview” for a fast 480p check, or “Final” for 1080p. Only scenes that changed are re-rendered.</p>
         </div>
       </div>

@@ -6,17 +6,34 @@ interface LoadedScene extends SceneTiming {
 
 const realClock = { random: Math.random, now: Date.now, perf: performance.now.bind(performance) };
 
-function forbid(name: string, instead: string): () => never {
+/** A fixed wall-clock origin, so `Date.now()` inside a scene is the same on every machine and every render. */
+const EPOCH = Date.UTC(2025, 0, 1);
+
+function hashString(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+function seeded(seed: number): () => number {
+  let a = seed || 1;
   return () => {
-    throw new Error(`${name} is not allowed in scenes (frames must depend only on t). ${instead}`);
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-/** Run `fn` with nondeterministic APIs disabled, so a scene can never depend on wall-clock time or chance. */
-function deterministic<T>(fn: () => T): T {
-  Math.random = forbid('Math.random', 'Use rng(seed) from "luma".');
-  Date.now = forbid('Date.now', 'Use the time argument t.');
-  performance.now = forbid('performance.now', 'Use the time argument t.');
+/**
+ * Run `fn` on a virtual clock, so a frame depends only on its time: `Math.random` replays the same sequence on every
+ * frame of a scene, and `Date.now` / `performance.now` report the video time. Libraries such as GSAP and Three.js
+ * work unchanged, and a render draws exactly what the preview shows.
+ */
+function deterministic<T>(seed: string, time: number, fn: () => T): T {
+  Math.random = seeded(hashString(seed));
+  Date.now = () => EPOCH + Math.round(time * 1000);
+  performance.now = () => time * 1000;
   try {
     return fn();
   } finally {
@@ -95,7 +112,7 @@ export class Engine {
       };
       ctx.save();
       try {
-        deterministic(() => scene.draw(ctx, t, frame));
+        deterministic(scene.path, time, () => scene.draw(ctx, t, frame));
       } catch (e) {
         this.fail(scene.path, e, time);
       } finally {

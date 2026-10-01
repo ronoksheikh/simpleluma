@@ -4,36 +4,39 @@
 
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* Luma Studio: the brand blues on clean neutrals. No navy: text is a neutral ink. */
   --color-lumablue: #2970ec;
   --color-sky: #5daeff;
   --color-royal: #1557d1;
   --color-deep: #07358f;
   --color-offwhite: #eff5ff;
-  --color-night: #071738;
+  --color-canvas: #f4f6fa;
+  --color-ink: #16181d;
+  --color-stage: #0e0f13;
+  --color-success: #12a150;
 }
 
-/* Lumademy palette on top of the HeroUI theme tokens. */
 :root,
 [data-theme="light"] {
-  --background: #eff5ff;
-  --foreground: #071738;
+  --background: #f4f6fa;
+  --foreground: #16181d;
   --surface: #ffffff;
-  --surface-foreground: #071738;
+  --surface-foreground: #16181d;
   --overlay: #ffffff;
-  --overlay-foreground: #071738;
-  --muted: rgb(7 23 56 / 0.58);
+  --overlay-foreground: #16181d;
+  --muted: rgb(22 24 29 / 0.56);
   --accent: #2970ec;
   --accent-hover: #1557d1;
   --accent-foreground: #ffffff;
   --focus: #5daeff;
   --link: #2970ec;
-  --border: rgb(7 23 56 / 0.1);
-  --separator: rgb(7 23 56 / 0.08);
-  --default: rgb(41 112 236 / 0.08);
-  --default-foreground: #071738;
+  --border: rgb(22 24 29 / 0.09);
+  --separator: rgb(22 24 29 / 0.07);
+  --default: rgb(22 24 29 / 0.05);
+  --default-foreground: #16181d;
   --field-background: #ffffff;
-  --field-border: rgb(7 23 56 / 0.14);
+  --field-border: rgb(22 24 29 / 0.13);
   --field-border-width: 1px;
   --radius: 0.75rem;
   /* No orange anywhere: status "warning" uses the brand blue. */
@@ -65,6 +68,20 @@ body {
   background: linear-gradient(135deg, #5daeff 0%, #2970ec 37%, #1557d1 72%, #07358f 100%);
 }
 
+.brand-text {
+  background: linear-gradient(120deg, #5daeff 0%, #2970ec 45%, #1557d1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid rgb(22 24 29 / 0.07);
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 2px rgb(22 24 29 / 0.04), 0 8px 24px -16px rgb(22 24 29 / 0.12);
+}
+
 .xterm {
   padding: 8px 10px;
   height: 100%;
@@ -75,7 +92,7 @@ body {
 
 .thin-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgb(7 23 56 / 0.2) transparent;
+  scrollbar-color: rgb(22 24 29 / 0.18) transparent;
 }
 
 /* Primary buttons carry the brand gradient; hover settles on Royal. */
@@ -85,4 +102,63 @@ body {
 }
 .button--primary:hover:not([data-disabled]) {
   background: #1557d1;
+}
+
+/* Markdown in chat. */
+.md {
+  font-size: 14.5px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.md > * + * {
+  margin-top: 0.6em;
+}
+.md h1, .md h2, .md h3, .md h4 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin-top: 1em;
+}
+.md h1 { font-size: 1.25em; }
+.md h2 { font-size: 1.12em; }
+.md h3, .md h4 { font-size: 1em; }
+.md ul { list-style: disc; padding-left: 1.3em; }
+.md ol { list-style: decimal; padding-left: 1.4em; }
+.md li + li { margin-top: 0.2em; }
+.md li::marker { color: rgb(41 112 236 / 0.7); }
+.md a { color: var(--color-lumablue); text-decoration: underline; text-underline-offset: 2px; }
+.md strong { font-weight: 600; }
+.md blockquote { border-left: 3px solid rgb(41 112 236 / 0.35); padding-left: 0.9em; color: rgb(22 24 29 / 0.7); }
+.md code { font-family: var(--font-mono); font-size: 0.86em; background: rgb(22 24 29 / 0.06); border-radius: 6px; padding: 0.12em 0.38em; }
+.md pre { background: #15171c; color: #e8ecf3; border-radius: 12px; padding: 12px 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+.md pre code { background: transparent; padding: 0; font-size: inherit; color: inherit; }
+.md table { width: 100%; border-collapse: collapse; font-size: 13px; display: block; overflow-x: auto; }
+.md th, .md td { border-bottom: 1px solid rgb(22 24 29 / 0.08); padding: 6px 10px; text-align: left; vertical-align: top; }
+.md th { font-weight: 600; color: rgb(22 24 29 / 0.6); font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+.md hr { border: 0; border-top: 1px solid rgb(22 24 29 / 0.08); }
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.shimmer-text {
+  background: linear-gradient(90deg, rgb(22 24 29 / 0.45) 0%, rgb(22 24 29 / 0.9) 50%, rgb(22 24 29 / 0.45) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2.2s linear infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+/* The checkered backdrop behind logos and transparent images. */
+.checker {
+  background-color: #fff;
+  background-image: conic-gradient(#eef2f8 25%, transparent 0 50%, #eef2f8 0 75%, transparent 0);
+  background-size: 14px 14px;
 }
