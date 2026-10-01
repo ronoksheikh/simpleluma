@@ -10,7 +10,7 @@ try {
   await step('redirects to login and shows the branded screen', async () => {
     await page.goto(BASE);
     await page.waitForURL('**/login');
-    await page.getByText('Describe a video.').waitFor();
+    await page.getByText('Welcome back').waitFor();
     await page.screenshot({ path: `${SHOTS}/01-login.png` });
   });
 
@@ -18,10 +18,10 @@ try {
     await page.getByRole('link', { name: 'Create an account' }).click();
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill('short');
-    await page.getByRole('button', { name: 'Sign up' }).click();
+    await page.getByRole('button', { name: 'Create account' }).click();
     await page.getByText('Use at least 8 characters').waitFor();
     await page.getByLabel('Password').fill('correct horse battery');
-    await page.getByRole('button', { name: 'Sign up' }).click();
+    await page.getByRole('button', { name: 'Create account' }).click();
     await page.waitForURL('**/setup');
   });
 
@@ -42,24 +42,25 @@ try {
     await page.waitForURL(BASE + '/');
   });
 
-  await step('dashboard: empty state, create a blank video and the demo', async () => {
-    await page.getByText('Make your first video').waitFor();
+  await step('home: empty state, open a blank video, then brief the Director from the home page', async () => {
+    await page.getByText('No videos yet').waitFor();
     await page.screenshot({ path: `${SHOTS}/03-empty.png` });
-    await page.getByRole('button', { name: 'New video' }).first().click();
-    await page.getByLabel('Name').fill('Lumademy logo intro');
-    await page.getByRole('button', { name: 'Create video' }).click();
+    await page.getByRole('button', { name: /open an empty video/ }).click();
     await page.waitForURL('**/p/*');
+    await page.getByText('What shall we direct?').waitFor();
     await page.goto(BASE);
-    await page.getByRole('button', { name: 'New video' }).first().click();
-    await page.getByLabel('Name').fill('Demo reel');
-    await page.getByRole('radio', { name: /Demo reel/ }).click();
-    await page.getByRole('button', { name: 'Create video' }).click();
+    await page.getByRole('button', { name: /Demo reel/ }).click();
+    await page.getByLabel('Describe your video').fill('Explain the demo reel to me');
+    await page.getByRole('button', { name: 'Start' }).click();
     await page.waitForURL('**/p/*');
+    // The brief went straight to the Director.
+    await page.getByText('Explain the demo reel to me').first().waitFor();
     await page.goto(BASE);
-    await page.getByText('Demo reel').waitFor();
+    await page.locator('main').getByText('Explain the demo reel').first().waitFor();
     await page.waitForTimeout(2500);
-    await page.screenshot({ path: `${SHOTS}/04-dashboard.png` });
+    await page.screenshot({ path: `${SHOTS}/04-home.png` });
   });
+
   summary();
 } finally {
   await browser.close();

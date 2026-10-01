@@ -5,7 +5,7 @@ import { badRequest } from '../lib/errors.js';
 const MAX_BYTES = 15 * 1024 * 1024;
 
 /** Addresses the Director must never reach: this machine, the private network and cloud metadata. */
-function isPrivate(ip: string): boolean {
+export function isPrivate(ip: string): boolean {
   if (isIP(ip) === 6) {
     const v = ip.toLowerCase();
     if (v.startsWith('::ffff:')) return isPrivate(v.slice(7));

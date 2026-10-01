@@ -116,9 +116,7 @@ export function AssetsTab({ attachments }: { attachments: Attachment[] }) {
                 <div className="truncate px-2.5 py-1.5 text-[11.5px]" title={a.path}>{a.name.split('/').pop()}</div>
                 <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
                   <Tooltip delay={200}>
-                    <Tooltip.Trigger>
-                      <Button size="sm" isIconOnly variant="secondary" aria-label={`Add ${a.name} to the message`} onPress={() => attachToDraft([a.path])}><PaperclipIcon size={13} /></Button>
-                    </Tooltip.Trigger>
+                    <Button size="sm" isIconOnly variant="secondary" aria-label={`Add ${a.name} to the message`} onPress={() => attachToDraft([a.path])}><PaperclipIcon size={13} /></Button>
                     <Tooltip.Content>Add to message</Tooltip.Content>
                   </Tooltip>
                   <Button size="sm" isIconOnly variant="secondary" aria-label={`Delete ${a.name}`} onPress={() => remove.mutate(a.path)}><TrashIcon size={13} /></Button>

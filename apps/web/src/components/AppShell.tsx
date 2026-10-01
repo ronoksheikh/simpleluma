@@ -1,4 +1,4 @@
-import { Avatar, Button, Dropdown, SearchField, Tooltip } from '@heroui/react';
+import { Avatar, Button, Dropdown, SearchField } from '@heroui/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -78,12 +78,7 @@ function Sidebar() {
   if (collapsed) {
     return (
       <aside className="flex w-[60px] shrink-0 flex-col items-center gap-2 py-3" aria-label="Sidebar">
-        <Tooltip delay={300}>
-          <Tooltip.Trigger>
-            <button type="button" onClick={toggle} aria-label="Expand sidebar" className="grid size-10 place-items-center rounded-xl hover:bg-ink/5"><LogoSymbol size={26} /></button>
-          </Tooltip.Trigger>
-          <Tooltip.Content placement="right">Expand sidebar</Tooltip.Content>
-        </Tooltip>
+        <button title="Expand sidebar" type="button" onClick={toggle} aria-label="Expand sidebar" className="grid size-10 place-items-center rounded-xl hover:bg-ink/5"><LogoSymbol size={26} /></button>
         <Button isIconOnly size="sm" aria-label="New video" onPress={() => navigate('/?new=1')}><PlusIcon size={16} /></Button>
         <NavLink to="/" end aria-label="Home" className={({ isActive }) => `grid size-9 place-items-center rounded-xl ${isActive ? 'bg-white text-lumablue shadow-sm' : 'text-ink/55 hover:bg-ink/5'}`}><HomeIcon size={18} /></NavLink>
         <NavLink to="/settings" aria-label="Settings" className={({ isActive }) => `grid size-9 place-items-center rounded-xl ${isActive ? 'bg-white text-lumablue shadow-sm' : 'text-ink/55 hover:bg-ink/5'}`}><GearIcon size={18} /></NavLink>
@@ -98,12 +93,7 @@ function Sidebar() {
     <aside className="flex w-[264px] shrink-0 flex-col" aria-label="Sidebar">
       <div className="flex h-14 items-center justify-between px-4">
         <Logo />
-        <Tooltip delay={300}>
-          <Tooltip.Trigger>
-            <button type="button" onClick={toggle} aria-label="Collapse sidebar" className="grid size-8 place-items-center rounded-lg text-ink/45 hover:bg-ink/5 hover:text-ink"><SidebarIcon size={17} /></button>
-          </Tooltip.Trigger>
-          <Tooltip.Content>Collapse sidebar</Tooltip.Content>
-        </Tooltip>
+        <button title="Collapse sidebar" type="button" onClick={toggle} aria-label="Collapse sidebar" className="grid size-8 place-items-center rounded-lg text-ink/45 hover:bg-ink/5 hover:text-ink"><SidebarIcon size={17} /></button>
       </div>
 
       <div className="px-3">

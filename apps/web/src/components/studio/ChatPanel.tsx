@@ -372,18 +372,14 @@ function Composer() {
         <div className="flex items-center gap-1.5 px-2.5 pb-2.5">
           <input ref={fileInput} type="file" multiple hidden accept={ACCEPT} onChange={(e) => { void upload([...(e.target.files ?? [])]); e.target.value = ''; }} />
           <Tooltip delay={400}>
-            <Tooltip.Trigger>
-              <Button isIconOnly variant="ghost" size="sm" aria-label="Attach files" isPending={uploading} onPress={() => fileInput.current?.click()}><PaperclipIcon size={17} /></Button>
-            </Tooltip.Trigger>
+            <Button isIconOnly variant="ghost" size="sm" aria-label="Attach files" isPending={uploading} onPress={() => fileInput.current?.click()}><PaperclipIcon size={17} /></Button>
             <Tooltip.Content>Images, SVG, PDF, zip, HTML reference, brand docs</Tooltip.Content>
           </Tooltip>
           <span className="hidden text-[11.5px] text-ink/35 sm:inline"><kbd className="font-sans font-medium text-ink/50">Enter</kbd> to send · <kbd className="font-sans font-medium text-ink/50">Shift + Enter</kbd> for a new line</span>
           <span className="flex-1" />
           {chat.running && (
             <Tooltip delay={300}>
-              <Tooltip.Trigger>
-                <Button isIconOnly size="sm" variant="secondary" aria-label="Stop the Director" onPress={() => void stop()}><StopIcon size={14} /></Button>
-              </Tooltip.Trigger>
+              <Button isIconOnly size="sm" variant="secondary" aria-label="Stop the Director" onPress={() => void stop()}><StopIcon size={14} /></Button>
               <Tooltip.Content>Stop</Tooltip.Content>
             </Tooltip>
           )}

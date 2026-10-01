@@ -113,9 +113,7 @@ export function BrandTab({ projectId, attachments }: { projectId: string; attach
         </div>
         <div className="flex gap-2">
           <Tooltip delay={300}>
-            <Tooltip.Trigger>
-              <Button size="sm" variant="ghost" isPending={rescan.isPending} onPress={() => rescan.mutate()}><RefreshIcon size={14} />Auto-detect</Button>
-            </Tooltip.Trigger>
+            <Button size="sm" variant="ghost" isPending={rescan.isPending} onPress={() => rescan.mutate()}><RefreshIcon size={14} />Auto-detect</Button>
             <Tooltip.Content>Fill in colours, logos and rules from the files by rules, without the Director</Tooltip.Content>
           </Tooltip>
           <Button size="sm" variant="secondary" isDisabled={chat.running} onPress={() => void send('Read the brand material in this project (logos, guidelines, brand kits, references) and record the brand with update_brand: name, colours with roles and usage, gradients, fonts, which logo to use where, rules and tone. Use judgement, then tell me in a few lines what you recorded.')}><SparkIcon size={14} />Ask the Director</Button>

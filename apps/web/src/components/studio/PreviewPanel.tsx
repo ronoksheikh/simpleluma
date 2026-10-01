@@ -59,14 +59,9 @@ function SceneTrack({ timeline, duration, time, onSeek, onInclude }: { timeline:
                   title={`${s.path} · ${seconds(s.start)}–${seconds(s.start + s.duration)}`}
                 >
                   <span className="truncate">{sceneLabel(s.path)}</span>
-                  <Tooltip delay={200}>
-                    <Tooltip.Trigger>
-                      <button type="button" aria-label={`Include ${sceneLabel(s.path)} in the chat`} onClick={() => onInclude(s)} className="ml-auto hidden size-5 shrink-0 place-items-center rounded-md bg-white/25 hover:bg-white/40 group-hover:grid">
+                  <button title="Include this scene for changes" type="button" aria-label={`Include ${sceneLabel(s.path)} in the chat`} onClick={() => onInclude(s)} className="ml-auto hidden size-5 shrink-0 place-items-center rounded-md bg-white/25 hover:bg-white/40 group-hover:grid">
                         <PlusIcon size={12} />
                       </button>
-                    </Tooltip.Trigger>
-                    <Tooltip.Content>Include this scene for changes</Tooltip.Content>
-                  </Tooltip>
                 </div>
               );
             })}
@@ -185,15 +180,11 @@ export function PreviewPanel({ video, reloadKey, head, onShare }: { video: Video
           {head && <span className="ml-2 font-mono text-[11px] text-ink/35">{head.slice(0, 7)}</span>}
         </span>
         <Tooltip delay={300}>
-          <Tooltip.Trigger>
-            <Button size="sm" variant="ghost" onPress={() => addContext({ type: 'frame', time: time.current })}><CrosshairIcon size={15} />Include frame</Button>
-          </Tooltip.Trigger>
+          <Button size="sm" variant="ghost" onPress={() => addContext({ type: 'frame', time: time.current })}><CrosshairIcon size={15} />Include frame</Button>
           <Tooltip.Content>Point the Director at the moment {seconds(now)}</Tooltip.Content>
         </Tooltip>
         <Tooltip delay={300}>
-          <Tooltip.Trigger>
-            <Button size="sm" variant="ghost" isIconOnly aria-label="Share" onPress={onShare}><ShareIcon size={15} /></Button>
-          </Tooltip.Trigger>
+          <Button size="sm" variant="ghost" isIconOnly aria-label="Share" onPress={onShare}><ShareIcon size={15} /></Button>
           <Tooltip.Content>Share a link to this version</Tooltip.Content>
         </Tooltip>
         <Button size="sm" variant="secondary" isPending={starting === 'preview'} isDisabled={rendering} onPress={() => void startRender('preview')}>Quick 480p</Button>

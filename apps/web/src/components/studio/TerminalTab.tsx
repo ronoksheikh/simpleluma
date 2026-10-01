@@ -94,7 +94,7 @@ function UserTerminal({ projectId, visible }: { projectId: string; visible: bool
     if (visible) requestAnimationFrame(() => handle.current?.fit());
   }, [visible]);
 
-  return <div ref={host} className="h-full" aria-label="Terminal" />;
+  return <div ref={host} className="h-full" aria-label="Your shell terminal" />;
 }
 
 /** The terminal as a workspace tab: the Director's commands live, and your own shell in the project folder. */
